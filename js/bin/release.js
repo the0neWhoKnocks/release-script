@@ -73,7 +73,6 @@ const parseArgs = ({ desc, flags }) => {
     if (/^--?/.test(currArg)) currProp = undefined;
     
     if (currProp) {
-      if (typeof args[currProp] === 'boolean') args[currProp] = [];
       args[currProp].push(currArg);
     }
     else {
@@ -81,8 +80,8 @@ const parseArgs = ({ desc, flags }) => {
         const { flag, prop } = flags[i];
         
         if (flag.includes(currArg)) {
-          args[prop] = true;
           currProp = prop;
+          args[currProp] = [];
           break;
         }
       }
@@ -158,7 +157,13 @@ class CLISelect {
     process.stdin.resume();
     process.stdin.setEncoding('utf-8');
     CLISelect.hideCursor();
-    process.stdin.on('data', this.pn(this));
+    
+    this.handleInputData = this.handleInputData.bind(this);
+    process.stdin.on('data', this.handleInputData);
+    
+    return new Promise((resolve) => {
+      this.resolveSelection = resolve;
+    });
   }
   
   render() {
@@ -175,30 +180,32 @@ class CLISelect {
     process.stdout.write(msg);
   }
 
-  pn(self) {
-    return (c) => {
-      switch (c) {
-        case '\r':
-        case '\n': return self.enter();
-        case '\u0004': // Ctrl-d
-        case '\u0003': // CTRL+C
-          return self.reset(); 
-        case '\u001b[A': return self.upArrow();
-        case '\u001b[B': return self.downArrow();
-      }
+  handleInputData(data) {
+    switch (data) {
+      case '\r':
+      case '\n': return this.enter();
+      case '\u0004': // Ctrl-d
+      case '\u0003': // CTRL+C
+        return this.reset(); 
+      case '\u001b[A': return this.upArrow();
+      case '\u001b[B': return this.downArrow();
     }
   }
   
   reset() {
-    process.stdin.removeListener('data', this.pn);
+    process.stdin.removeListener('data', this.handleInputData);
     process.stdin.setRawMode(false);
     process.stdin.pause();
     CLISelect.showCursor();
+    
+    if (!this.selection) this.resolveSelection();
   }
 
   enter() {
+    this.selection = this.rawOptions[this.selectedOptionNdx][1];
     this.reset();
-    console.log(`\n ${this.selectedMsg.replace('%s', color.blue.bold(this.rawOptions[this.selectedOptionNdx][1]))}`);
+    console.log(`\n ${this.selectedMsg.replace('%s', color.blue.bold(this.selection))}\n`);
+    this.resolveSelection(this.selection);
   }
 
   upArrow() {
@@ -218,256 +225,261 @@ class CLISelect {
 
 // Script specific =============================================================
 
-const {
-  APP__NAME,
-  APP__TEST_URL,
-  CMD__BUILD,
-  CMD__COMPILE,
-  CMD__START,
-  PATH__CREDS__DOCKER,
-  PATH__CREDS__NPM,
-  PATH__REPO_ROOT,
-} = require('./release-config.js');
-const args = parseArgs({
-  desc: 'A zero dependency script to help you release/publish code.',
-  flags: [
-    {
-      prop: 'dryRun',
-      flag: ['--dry-run', '-dr'],
-      desc: "Prints out everything that'll happen. Won't actually deploy any code.",
-    },
-  ],
-});
+(async function release() {
+  const {
+    APP__NAME,
+    APP__TEST_URL,
+    CMD__BUILD,
+    CMD__COMPILE,
+    CMD__START,
+    PATH__CREDS__DOCKER,
+    PATH__CREDS__NPM,
+    PATH__REPO_ROOT,
+  } = require('./release-config.js');
+  const PACKAGE_JSON = require(`${PATH__REPO_ROOT}/package.json`);
+  const args = parseArgs({
+    desc: 'A zero dependency script to help you release/publish code.',
+    flags: [
+      {
+        prop: 'dryRun',
+        flag: ['--dry-run', '-dr'],
+        desc: "Prints out everything that'll happen. Won't actually deploy any code.",
+      },
+    ],
+  });
 
-// Get current version number
-const VERSION = require(`${PATH__REPO_ROOT}/package.json`).version;
-const REPO_URL = cmd('git config --get remote.origin.url')
-  .replace(/^git@/, 'https://')
-  .replace('.com:', '.com/')
-  .replace(/\.git$/, '');
-// Build out what the version would be based on what the user chooses
-const VERSION_NUMS = VERSION.split('.');
-const MAJOR = `${+VERSION_NUMS[0] + 1}.0.0`;
-const MINOR = `${VERSION_NUMS[0]}.${+VERSION_NUMS[1] + 1}.0`;
-const PATCH = `${VERSION_NUMS[0]}.${VERSION_NUMS[1]}.${+VERSION_NUMS[2] + 1}`;
+  // Get current version number
+  const CURRENT_VERSION = PACKAGE_JSON.version;
+  const REPO_URL = cmd('git config --get remote.origin.url')
+    .replace(/^git@/, 'https://')
+    .replace('.com:', '.com/')
+    .replace(/\.git$/, '');
+  // Build out what the version would be based on what the user chooses
+  const VERSION_NUMS = CURRENT_VERSION.split('.');
+  const MAJOR = `${+VERSION_NUMS[0] + 1}.0.0`;
+  const MINOR = `${VERSION_NUMS[0]}.${+VERSION_NUMS[1] + 1}.0`;
+  const PATCH = `${VERSION_NUMS[0]}.${VERSION_NUMS[1]}.${+VERSION_NUMS[2] + 1}`;
 
-renderHeader('BUMP', 'versions');
-new CLISelect({
-  label: 'Choose version:',
-  options: [
-    [`${color.green(PATCH)} ${color.black.bold('[Patch]')}`, PATCH],
-    [`${color.yellow(MINOR)} ${color.black.bold('[Minor]')}`, MINOR],
-    [`${color.red(MAJOR)} ${color.black.bold('[Major]')}`, MAJOR],
-  ],
-  selectedMsg: 'Bumping version to: %s',
-});
+  renderHeader('BUMP', 'versions');
+  const NEW_VERSION = await new CLISelect({
+    label: 'Choose version:',
+    options: [
+      [`${color.green(PATCH)} ${color.black.bold('[Patch]')}`, PATCH],
+      [`${color.yellow(MINOR)} ${color.black.bold('[Minor]')}`, MINOR],
+      [`${color.red(MAJOR)} ${color.black.bold('[Major]')}`, MAJOR],
+    ],
+    selectedMsg: 'Bumping version to: %s',
+  });
 
+  // Ensure tags are up to date
+  renderHeader('FETCH', 'tags');
+  console.log(cmd('git fetch --tags'));
+  
+  // Get previous tag info so that the changelog can be updated.
+  let latestTag;
+  if (cmd('git tag -l')) {
+    renderHeader('GET', 'latest tag');
+    latestTag = cmd('git tag -l | tail -n1');
+    console.log(`\n Latest tag: ${color.blue.bold(latestTag)}`);
+  }
 
-// 
-// echo;
-// if [[ "$bump" != "" ]]; then
-//   # ensure tags are up to date
-//   git fetch --tags
-// 
-//   # get previous tag info so that the changelog can be updated.
-//   if [[ $(git tag -l) != "" ]]; then
-//     latestTag=$(git tag -l | tail -n1)
-//     #echo "Latest tag: $latestTag"
-//   fi
-// 
-//   # run tests if they exist
-//   TESTS_SCRIPT=$(node -p "require('./package.json').scripts.test")
-//   if [[ "$TESTS_SCRIPT" != "undefined" ]]; then
-//     npm run test
-//   fi
-// 
-//   # get a list of changes between tags
-//   if [[ "$latestTag" != "" ]]; then
-//     filename="./CHANGELOG.md"
-//     newContent=""
-//     touch "$filename"
-// 
-//     #changes=$(git log "v3.1.0".."v4.0.0" --oneline)
-//     changes=$(git log "$latestTag"..HEAD --oneline)
-//     formattedChanges=""
-//     while read -r line; do
-//       escapedLine=$(echo "$line" | sed "s/\x27/_SQ_/g")
-// 
-//       if [[ "$formattedChanges" != "" ]]; then
-//         formattedChanges="$formattedChanges,'$escapedLine'"
-//       else
-//         formattedChanges="'$escapedLine'"
-//       fi
-//     done < <(echo -e "$changes")
-//     formattedChanges="[$formattedChanges]"
-// 
-//     newContent=$(node -pe "
-//       const categories = {
-//         'Bugfixes': [],
-//         'Dev-Ops': [],
-//         'Features': [],
-//         'Misc. Tasks': [],
-//         'Uncategorized': [],
-//       };
-// 
-//       $formattedChanges
-//         .map(change => {
-//           return change
-//             .replace(/^([a-z0-9]+)\s/i, \"- [\$1]($REPO_URL/commit/\$1) \")
-//             .replace(/_SQ_/g, \"'\");
-//         })
-//         .forEach(change => {
-//           if (change.includes(' fix: ')) categories['Bugfixes'].push(change.replace(' fix:', ' -'));
-//           else if (change.includes(' ops: ')) categories['Dev-Ops'].push(change.replace(' ops:', ' -'));
-//           else if (change.includes(' feat: ')) categories['Features'].push(change.replace(' feat:', ' -'));
-//           else if (change.includes(' chore: ')) categories['Misc. Tasks'].push(change.replace(' chore:', ' -'));
-//           else categories['Uncategorized'].push(change);
-//         });
-// 
-//         Object.keys(categories)
-//           .map(category => {
-//             const categoryItems = categories[category];
-//             return (categoryItems.length)
-//               ? \`**\${category}**\n\${categoryItems.join('\n')}\`
-//               : null;
-//           })
-//           .filter(category => !!category)
-//           .join('\n\n');
-//     ")
-//     handleError $? "Couldn't parse commit messages"
-// 
-//     # add changes to top of logs
-//     originalLog=$(cat "$filename")
-//     if [[ "$newContent" != "" ]]; then
-//       changelog=""
-//       lineNum=0
-//       while read line; do
-//         if [ $lineNum != 0 ]; then changelog+=$'\n'; fi;
-// 
-//         changelog+="$line"
-//         lineNum+=1
-// 
-//         # find the line just under the header text
-//         if [ "$changelog" = "# Changelog"$'\n'"---" ]; then
-//           # append the new changes
-//           change=$'\n'"## v$newVersion"$'\n\n'"$newContent"
-//           changelog="$changelog"$'\n'"$change"$'\n\n'"---"
-//         fi;
-//       done < $filename
-// 
-//       echo "$changelog" > "$filename"
-//     fi
-//   fi
-// 
-//   npm version --no-git-tag-version $bump
-//   handleError $? "Couldn't bump version number."
-// 
-//   if [[ "$COMPILE_CMD" != "" ]]; then
-//     echo;
-//     echo "[ COMPILE ] code ========================="
-//     echo;
-//     $COMPILE_CMD
-//     handleError $? "Couldn't compile with new version."
-//   fi
-// 
-//   echo;
-//   echo "[ BUILD ] Docker Image ========================="
-//   echo;
-//   $BUILD_CMD
-//   handleError $? "Couldn't build Docker image"
-// 
-//   echo;
-//   echo "[ START ] Docker Image ========================="
-//   echo;
-//   # Run the new image
-//   $START_CMD
-//   handleError $? "Couldn't start Docker image"
-// 
-//   exec < /dev/tty
-//   echo;
-//   echo " Verify things are running properly at $APP_URL"
-//   echo;
-//   echo " (1) Continue"
-//   echo " (2) Abort"
-//   echo;
-// 
-//   read response
-// 
-//   case $response in
-//     1)
-//       continueRelease="true"
-//       ;;
-//   esac
-//   exec <&-
-// 
-//   # Stops the image and cleans things up
-//   docker-compose down
-// 
-//   if [[ "$continueRelease" != "" ]]; then
-//     LATEST_ID=$(docker images | grep -E "$DOCKER_USER/$APP_NAME.*latest" | awk '{print $3}')
-//     handleError $? "Couldn't get latest image id"
-// 
-//     versionString="v$newVersion"
-// 
-//     # log in (so the image can be pushed)
-//     docker login -u="$DOCKER_USER" -p="$DOCKER_PASS"
-//     handleError $? "Couldn't log in to Docker"
-//     # add and commit relevant changes
-//     git add CHANGELOG.md package.json package-lock.json
-//     git commit -m "Bump to $versionString"
-//     # tag all the things
-//     gitChangeLogMsg="## $versionString"$'\n\n'"$newContent"
-//     sanitizedGitChangeLogMsg=$(echo "$gitChangeLogMsg" | sed 's/"/\\"/g')
-//     git tag -a "$versionString" -m "$gitChangeLogMsg"
-//     docker tag "$LATEST_ID" "$DOCKER_USER/$APP_NAME:$versionString"
-//     handleError $? "Couldn't tag Docker image"
-//     # push up the tags
-//     git push --follow-tags
-//     docker push "$DOCKER_USER/$APP_NAME:$versionString"
-//     docker push "$DOCKER_USER/$APP_NAME:latest"
-//     # create an actual release
-//     ghToken=$(git config --global github.token)
-//     if [[ "$ghToken" != "" ]]; then
-//       echo;
-//       echo "[ CREATE ] GitHub Release ========================="
-//       echo;
-// 
-//       branch=$(git rev-parse --abbrev-ref HEAD)
-// 
-//       remoteOriginURL=$(git config --get remote.origin.url)
-//       regEx="^(https|git)(:\/\/|@)([^\/:]+)[\/:]([^\/:]+)\/(.+).git$"
-//       if [[ "$remoteOriginURL" =~ $regEx ]]; then
-//         user=${BASH_REMATCH[4]}
-//         repo=${BASH_REMATCH[5]}
-//       fi
-// 
-//       jsonPayload="{ \"tag_name\": \"$versionString\", \"target_commitish\": \"$branch\", \"name\": \"$versionString\", \"body\": \"$sanitizedGitChangeLogMsg\", \"draft\": false, \"prerelease\": false }"
-//       # encode newlines for JSON
-//       jsonPayload=$(echo "$jsonPayload" | sed -z 's/\n/\\n/g')
-//       # remove trailing newline
-//       jsonPayload=${jsonPayload%$'\\n'}
-// 
-//       releaseApiURL="https://api.github.com/repos/$user/$repo/releases"
-// 
-//       echo "  Payload: $jsonPayload"
-//       echo "  URL: \"$releaseApiURL\""
-// 
-//       # https://developer.github.com/v3/repos/releases/#create-a-release
-//       curl \
-//         -H "Content-Type: application/json" \
-//         -H "Authorization: token $ghToken" \
-//         -X POST \
-//         -d "$jsonPayload" \
-//         --silent --output /dev/null --show-error --fail \
-//         "$releaseApiURL"
-//       handleError $? "Couldn't promote tag to a release"
-//     else
-//       echo "[WARN] Skipping GH release creation: No GH token found";
-//     fi
-//   else
-//     # reset changelog
-//     echo "$originalLog" > "$filename"
-//     # reset version bump
-//     npm version --no-git-tag-version "$VERSION"
-//   fi
-// fi
+  // Run tests if they exist
+  const HAS_TEST_SCRIPT = PACKAGE_JSON.scripts && PACKAGE_JSON.scripts.test;
+  if (HAS_TEST_SCRIPT) {
+    renderHeader('RUN', 'tests');
+    const testCmd = `cd ${PATH__REPO_ROOT} && npm test`;
+    (args.dryRun)
+      ? console.log(`\n ${color.black.bgYellow(' DRYRUN ')} ${color.blue.bold(testCmd)}`)
+      : cmd(testCmd);
+  }
+  
+  //   # get a list of changes between tags
+  //   if [[ "$latestTag" != "" ]]; then
+  //     filename="./CHANGELOG.md"
+  //     newContent=""
+  //     touch "$filename"
+  // 
+  //     #changes=$(git log "v3.1.0".."v4.0.0" --oneline)
+  //     changes=$(git log "$latestTag"..HEAD --oneline)
+  //     formattedChanges=""
+  //     while read -r line; do
+  //       escapedLine=$(echo "$line" | sed "s/\x27/_SQ_/g")
+  // 
+  //       if [[ "$formattedChanges" != "" ]]; then
+  //         formattedChanges="$formattedChanges,'$escapedLine'"
+  //       else
+  //         formattedChanges="'$escapedLine'"
+  //       fi
+  //     done < <(echo -e "$changes")
+  //     formattedChanges="[$formattedChanges]"
+  // 
+  //     newContent=$(node -pe "
+  //       const categories = {
+  //         'Bugfixes': [],
+  //         'Dev-Ops': [],
+  //         'Features': [],
+  //         'Misc. Tasks': [],
+  //         'Uncategorized': [],
+  //       };
+  // 
+  //       $formattedChanges
+  //         .map(change => {
+  //           return change
+  //             .replace(/^([a-z0-9]+)\s/i, \"- [\$1]($REPO_URL/commit/\$1) \")
+  //             .replace(/_SQ_/g, \"'\");
+  //         })
+  //         .forEach(change => {
+  //           if (change.includes(' fix: ')) categories['Bugfixes'].push(change.replace(' fix:', ' -'));
+  //           else if (change.includes(' ops: ')) categories['Dev-Ops'].push(change.replace(' ops:', ' -'));
+  //           else if (change.includes(' feat: ')) categories['Features'].push(change.replace(' feat:', ' -'));
+  //           else if (change.includes(' chore: ')) categories['Misc. Tasks'].push(change.replace(' chore:', ' -'));
+  //           else categories['Uncategorized'].push(change);
+  //         });
+  // 
+  //         Object.keys(categories)
+  //           .map(category => {
+  //             const categoryItems = categories[category];
+  //             return (categoryItems.length)
+  //               ? \`**\${category}**\n\${categoryItems.join('\n')}\`
+  //               : null;
+  //           })
+  //           .filter(category => !!category)
+  //           .join('\n\n');
+  //     ")
+  //     handleError $? "Couldn't parse commit messages"
+  // 
+  //     # add changes to top of logs
+  //     originalLog=$(cat "$filename")
+  //     if [[ "$newContent" != "" ]]; then
+  //       changelog=""
+  //       lineNum=0
+  //       while read line; do
+  //         if [ $lineNum != 0 ]; then changelog+=$'\n'; fi;
+  // 
+  //         changelog+="$line"
+  //         lineNum+=1
+  // 
+  //         # find the line just under the header text
+  //         if [ "$changelog" = "# Changelog"$'\n'"---" ]; then
+  //           # append the new changes
+  //           change=$'\n'"## v$newVersion"$'\n\n'"$newContent"
+  //           changelog="$changelog"$'\n'"$change"$'\n\n'"---"
+  //         fi;
+  //       done < $filename
+  // 
+  //       echo "$changelog" > "$filename"
+  //     fi
+  //   fi
+  // 
+  //   npm version --no-git-tag-version $bump
+  //   handleError $? "Couldn't bump version number."
+  // 
+  //   if [[ "$COMPILE_CMD" != "" ]]; then
+  //     echo;
+  //     echo "[ COMPILE ] code ========================="
+  //     echo;
+  //     $COMPILE_CMD
+  //     handleError $? "Couldn't compile with new version."
+  //   fi
+  // 
+  //   echo;
+  //   echo "[ BUILD ] Docker Image ========================="
+  //   echo;
+  //   $BUILD_CMD
+  //   handleError $? "Couldn't build Docker image"
+  // 
+  //   echo;
+  //   echo "[ START ] Docker Image ========================="
+  //   echo;
+  //   # Run the new image
+  //   $START_CMD
+  //   handleError $? "Couldn't start Docker image"
+  // 
+  //   exec < /dev/tty
+  //   echo;
+  //   echo " Verify things are running properly at $APP_URL"
+  //   echo;
+  //   echo " (1) Continue"
+  //   echo " (2) Abort"
+  //   echo;
+  // 
+  //   read response
+  // 
+  //   case $response in
+  //     1)
+  //       continueRelease="true"
+  //       ;;
+  //   esac
+  //   exec <&-
+  // 
+  //   # Stops the image and cleans things up
+  //   docker-compose down
+  // 
+  //   if [[ "$continueRelease" != "" ]]; then
+  //     LATEST_ID=$(docker images | grep -E "$DOCKER_USER/$APP_NAME.*latest" | awk '{print $3}')
+  //     handleError $? "Couldn't get latest image id"
+  // 
+  //     versionString="v$newVersion"
+  // 
+  //     # log in (so the image can be pushed)
+  //     docker login -u="$DOCKER_USER" -p="$DOCKER_PASS"
+  //     handleError $? "Couldn't log in to Docker"
+  //     # add and commit relevant changes
+  //     git add CHANGELOG.md package.json package-lock.json
+  //     git commit -m "Bump to $versionString"
+  //     # tag all the things
+  //     gitChangeLogMsg="## $versionString"$'\n\n'"$newContent"
+  //     sanitizedGitChangeLogMsg=$(echo "$gitChangeLogMsg" | sed 's/"/\\"/g')
+  //     git tag -a "$versionString" -m "$gitChangeLogMsg"
+  //     docker tag "$LATEST_ID" "$DOCKER_USER/$APP_NAME:$versionString"
+  //     handleError $? "Couldn't tag Docker image"
+  //     # push up the tags
+  //     git push --follow-tags
+  //     docker push "$DOCKER_USER/$APP_NAME:$versionString"
+  //     docker push "$DOCKER_USER/$APP_NAME:latest"
+  //     # create an actual release
+  //     ghToken=$(git config --global github.token)
+  //     if [[ "$ghToken" != "" ]]; then
+  //       echo;
+  //       echo "[ CREATE ] GitHub Release ========================="
+  //       echo;
+  // 
+  //       branch=$(git rev-parse --abbrev-ref HEAD)
+  // 
+  //       remoteOriginURL=$(git config --get remote.origin.url)
+  //       regEx="^(https|git)(:\/\/|@)([^\/:]+)[\/:]([^\/:]+)\/(.+).git$"
+  //       if [[ "$remoteOriginURL" =~ $regEx ]]; then
+  //         user=${BASH_REMATCH[4]}
+  //         repo=${BASH_REMATCH[5]}
+  //       fi
+  // 
+  //       jsonPayload="{ \"tag_name\": \"$versionString\", \"target_commitish\": \"$branch\", \"name\": \"$versionString\", \"body\": \"$sanitizedGitChangeLogMsg\", \"draft\": false, \"prerelease\": false }"
+  //       # encode newlines for JSON
+  //       jsonPayload=$(echo "$jsonPayload" | sed -z 's/\n/\\n/g')
+  //       # remove trailing newline
+  //       jsonPayload=${jsonPayload%$'\\n'}
+  // 
+  //       releaseApiURL="https://api.github.com/repos/$user/$repo/releases"
+  // 
+  //       echo "  Payload: $jsonPayload"
+  //       echo "  URL: \"$releaseApiURL\""
+  // 
+  //       # https://developer.github.com/v3/repos/releases/#create-a-release
+  //       curl \
+  //         -H "Content-Type: application/json" \
+  //         -H "Authorization: token $ghToken" \
+  //         -X POST \
+  //         -d "$jsonPayload" \
+  //         --silent --output /dev/null --show-error --fail \
+  //         "$releaseApiURL"
+  //       handleError $? "Couldn't promote tag to a release"
+  //     else
+  //       echo "[WARN] Skipping GH release creation: No GH token found";
+  //     fi
+  //   else
+  //     # reset changelog
+  //     echo "$originalLog" > "$filename"
+  //     # reset version bump
+  //     npm version --no-git-tag-version "$VERSION"
+  //   fi
+})();
