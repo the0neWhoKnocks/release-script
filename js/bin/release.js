@@ -35,14 +35,29 @@ function handleError(exitCode, errMsg) {
   }
 }
 
-const cmd = (cmd) => {
-  const { execSync } = require('child_process');
-
-  try { return execSync(cmd).toString(); }
-  catch ({ message, status, stderr, stdout }) {
-    handleError(status, `Command "${cmd}" failed\n${message}`);
-  }
-};
+const cmd = (cmd, { silent = true } = {}) => new Promise((resolve, reject) => {
+  const { spawn } = require('child_process');
+  const child = spawn('sh', ['-c', cmd]);
+  let stdout = '';
+  let stderr = '';
+  
+  child.stdout.on('data', (data) => {
+    const out = data.toString();
+    if (!silent) process.stdout.write(out);
+    stdout += out;
+  });
+  
+  child.stderr.on('data', (data) => {
+    const err = data.toString();
+    if (!silent) process.stdout.write(err);
+    stderr += err;
+  });
+  
+  child.on('close', (statusCode) => {
+    if (statusCode === 0) resolve(stdout);
+    else reject(handleError(statusCode, `Command "${cmd}" failed\n${message}`));
+  });
+});
 
 function renderHeader(prefix, msg) {
   const TERMINAL_WIDTH = process.stdout.columns;
@@ -198,7 +213,10 @@ class CLISelect {
     process.stdin.pause();
     CLISelect.showCursor();
     
-    if (!this.selection) this.resolveSelection();
+    if (!this.selection) {
+      this.resolveSelection();
+      process.exit(0);
+    }
   }
 
   enter() {
@@ -250,7 +268,7 @@ class CLISelect {
 
   // Get current version number
   const CURRENT_VERSION = PACKAGE_JSON.version;
-  const REPO_URL = cmd('git config --get remote.origin.url')
+  const REPO_URL = (await cmd('git config --get remote.origin.url'))
     .replace(/^git@/, 'https://')
     .replace('.com:', '.com/')
     .replace(/\.git$/, '');
@@ -273,13 +291,13 @@ class CLISelect {
 
   // Ensure tags are up to date
   renderHeader('FETCH', 'tags');
-  console.log(cmd('git fetch --tags'));
+  await cmd('git fetch --tags', { silent: false });
   
   // Get previous tag info so that the changelog can be updated.
   let latestTag;
-  if (cmd('git tag -l')) {
+  if (await cmd('git tag -l')) {
     renderHeader('GET', 'latest tag');
-    latestTag = cmd('git tag -l | tail -n1');
+    latestTag = await cmd('git tag -l | tail -n1');
     console.log(`\n Latest tag: ${color.blue.bold(latestTag)}`);
   }
 
@@ -290,7 +308,7 @@ class CLISelect {
     const testCmd = `cd ${PATH__REPO_ROOT} && npm test`;
     (args.dryRun)
       ? console.log(`\n ${color.black.bgYellow(' DRYRUN ')} ${color.blue.bold(testCmd)}`)
-      : cmd(testCmd);
+      : await cmd(testCmd, { silent: false });
   }
   
   //   # get a list of changes between tags
