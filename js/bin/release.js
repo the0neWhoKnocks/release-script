@@ -433,12 +433,16 @@ class CLISelect {
     });
   }
   
-  //   echo;
-  //   echo "[ BUILD ] Docker Image ========================="
-  //   echo;
-  //   $BUILD_CMD
-  //   handleError $? "Couldn't build Docker image"
-  // 
+  if (CMD__DOCKER_BUILD) {
+    renderHeader('BUILD', 'Docker Image');
+    if (args.dryRun) dryRunCmd(CMD__DOCKER_BUILD);
+    else await cmd(CMD__DOCKER_BUILD, {
+      cwd: PATH__REPO_ROOT,
+      onError: rollbackRelease,
+      silent: false,
+    });
+  }
+  
   //   echo;
   //   echo "[ START ] Docker Image ========================="
   //   echo;

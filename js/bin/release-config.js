@@ -6,7 +6,7 @@ module.exports = {
   // URL that the App will be available at once started.
   APP__TEST_URL: '<APP_URL>',
   // Command to build specific or all Docker containers
-  CMD__DOCKER_BUILD: '<BUILD_DOCKER_CMD>',
+  CMD__DOCKER_BUILD: 'docker-compose build',
   // Command to start the built Container(s), so a Dev can verify before it's deployed
   CMD__DOCKER_START: '<START_DOCKER_CMD>',
   // Command to compile any assets that may be needed by Docker, shipped off to S3, etc.
