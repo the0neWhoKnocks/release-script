@@ -409,14 +409,19 @@ class CLISelect {
   }
   
   renderHeader('BUMP', 'Node package version');
-  rollbacks.push({ label: 'Node package version', cmd: `npm version --no-git-tag-version ${ORIGINAL_VERSION}` });
   const NPM_BUMP_CMD = `npm version --no-git-tag-version ${NEW_VERSION}`;
   if (args.dryRun) dryRunCmd(NPM_BUMP_CMD);
-  else await cmd(NPM_BUMP_CMD, {
-    cwd: PATH__REPO_ROOT,
-    onError: rollbackRelease,
-    silent: false,
-  });
+  else {
+    rollbacks.push({
+      label: 'Node package version',
+      cmd: `npm version --no-git-tag-version --allow-same-version ${ORIGINAL_VERSION}`,
+    });
+    await cmd(NPM_BUMP_CMD, {
+      cwd: PATH__REPO_ROOT,
+      onError: rollbackRelease,
+      silent: false,
+    });
+  }
   
   if (CMD__COMPILE_ASSETS) {
     renderHeader('COMPILE', 'assets');
