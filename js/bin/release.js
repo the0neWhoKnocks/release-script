@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { readFileSync } = require('fs');
+const { existsSync, readFileSync, writeFileSync } = require('fs');
 const { resolve } = require('path');
 
 // Boilerplate =================================================================
@@ -270,6 +270,10 @@ class CLISelect {
       },
     ],
   });
+  
+  function dryRunCmd(_cmd) {
+    console.log(`\n ${color.black.bgYellow(' DRYRUN ')} ${color.blue.bold(_cmd)}`);
+  }
 
   // Get current version number
   const CURRENT_VERSION = PACKAGE_JSON.version;
@@ -312,87 +316,71 @@ class CLISelect {
     renderHeader('RUN', 'tests');
     const testCmd = `cd ${PATH__REPO_ROOT} && npm test`;
     (args.dryRun)
-      ? console.log(`\n ${color.black.bgYellow(' DRYRUN ')} ${color.blue.bold(testCmd)}`)
+      ? dryRunCmd(testCmd)
       : await cmd(testCmd, { silent: false });
   }
   
-  //   # get a list of changes between tags
-  //   if [[ "$latestTag" != "" ]]; then
-  //     filename="./CHANGELOG.md"
-  //     newContent=""
-  //     touch "$filename"
-  // 
-  //     #changes=$(git log "v3.1.0".."v4.0.0" --oneline)
-  //     changes=$(git log "$latestTag"..HEAD --oneline)
-  //     formattedChanges=""
-  //     while read -r line; do
-  //       escapedLine=$(echo "$line" | sed "s/\x27/_SQ_/g")
-  // 
-  //       if [[ "$formattedChanges" != "" ]]; then
-  //         formattedChanges="$formattedChanges,'$escapedLine'"
-  //       else
-  //         formattedChanges="'$escapedLine'"
-  //       fi
-  //     done < <(echo -e "$changes")
-  //     formattedChanges="[$formattedChanges]"
-  // 
-  //     newContent=$(node -pe "
-  //       const categories = {
-  //         'Bugfixes': [],
-  //         'Dev-Ops': [],
-  //         'Features': [],
-  //         'Misc. Tasks': [],
-  //         'Uncategorized': [],
-  //       };
-  // 
-  //       $formattedChanges
-  //         .map(change => {
-  //           return change
-  //             .replace(/^([a-z0-9]+)\s/i, \"- [\$1]($REPO_URL/commit/\$1) \")
-  //             .replace(/_SQ_/g, \"'\");
-  //         })
-  //         .forEach(change => {
-  //           if (change.includes(' fix: ')) categories['Bugfixes'].push(change.replace(' fix:', ' -'));
-  //           else if (change.includes(' ops: ')) categories['Dev-Ops'].push(change.replace(' ops:', ' -'));
-  //           else if (change.includes(' feat: ')) categories['Features'].push(change.replace(' feat:', ' -'));
-  //           else if (change.includes(' chore: ')) categories['Misc. Tasks'].push(change.replace(' chore:', ' -'));
-  //           else categories['Uncategorized'].push(change);
-  //         });
-  // 
-  //         Object.keys(categories)
-  //           .map(category => {
-  //             const categoryItems = categories[category];
-  //             return (categoryItems.length)
-  //               ? \`**\${category}**\n\${categoryItems.join('\n')}\`
-  //               : null;
-  //           })
-  //           .filter(category => !!category)
-  //           .join('\n\n');
-  //     ")
-  //     handleError $? "Couldn't parse commit messages"
-  // 
-  //     # add changes to top of logs
-  //     originalLog=$(cat "$filename")
-  //     if [[ "$newContent" != "" ]]; then
-  //       changelog=""
-  //       lineNum=0
-  //       while read line; do
-  //         if [ $lineNum != 0 ]; then changelog+=$'\n'; fi;
-  // 
-  //         changelog+="$line"
-  //         lineNum+=1
-  // 
-  //         # find the line just under the header text
-  //         if [ "$changelog" = "# Changelog"$'\n'"---" ]; then
-  //           # append the new changes
-  //           change=$'\n'"## v$newVersion"$'\n\n'"$newContent"
-  //           changelog="$changelog"$'\n'"$change"$'\n\n'"---"
-  //         fi;
-  //       done < $filename
-  // 
-  //       echo "$changelog" > "$filename"
-  //     fi
-  //   fi
+  if (latestTag) {
+    renderHeader('ADD', 'new CHANGELOG items');
+    
+    const CHANGELOG_PATH = `${PATH__REPO_ROOT}/CHANGELOG.md`;
+    const DEFAULT_CHANGELOG_CONTENT = '# Changelog\n---\n';
+    
+    if (!existsSync(CHANGELOG_PATH)) {
+      writeFileSync(CHANGELOG_PATH, DEFAULT_CHANGELOG_CONTENT);
+    }
+
+    // const commits = await cmd('git log "v3.1.0".."v4.0.0" --oneline');
+    const commits = await cmd(`git log "${latestTag}"..HEAD --oneline`);
+    const categories = {
+      'Bugfixes': [],
+      'Dev-Ops': [],
+      'Features': [],
+      'Misc. Tasks': [],
+      'Uncategorized': [],
+    };
+    let newChanges;
+    
+    try {
+      const TITLE_PREFIX = ': ';
+      commits.split('\n')
+        .map(commit => commit.replace(/^([a-z0-9]+)\s/i, `- [$1](${REPO_URL}/commit/$1) `))
+        .forEach(commit => {
+          if (commit.includes(' fix: ')) categories['Bugfixes'].push(commit.replace(' fix:', TITLE_PREFIX));
+          else if (commit.includes(' ops: ')) categories['Dev-Ops'].push(commit.replace(' ops:', TITLE_PREFIX));
+          else if (commit.includes(' feat: ')) categories['Features'].push(commit.replace(' feat:', TITLE_PREFIX));
+          else if (commit.includes(' chore: ')) categories['Misc. Tasks'].push(commit.replace(' chore:', TITLE_PREFIX));
+          else categories['Uncategorized'].push(commit);
+        });
+      
+      newChanges = Object.keys(categories)
+        .map(category => {
+          const categoryItems = categories[category];
+          return (categoryItems.length)
+            ? `**${category}**\n${categoryItems.join('\n')}`
+            : null;
+        })
+        .filter(category => !!category)
+        .join('\n\n');
+    }
+    catch (err) { handleError(1, "Couldn't parse commit messages"); }
+    
+    // Add changes to top of logs
+    const originalLog = readFileSync(CHANGELOG_PATH, 'utf8');
+    if (newChanges) {
+      const changelog = originalLog.replace(
+        new RegExp(`(${DEFAULT_CHANGELOG_CONTENT})`),
+        `$1\n## v${NEW_VERSION}\n\n${newChanges}\n\n---`
+      );
+      
+      if (args.dryRun) {
+        dryRunCmd(`writeFileSync(\n  '${CHANGELOG_PATH}',\n${changelog}\n)`);
+      }
+      else {
+        writeFileSync(CHANGELOG_PATH, changelog);
+      }
+    }
+  }
   // 
   //   npm version --no-git-tag-version $bump
   //   handleError $? "Couldn't bump version number."
@@ -442,7 +430,7 @@ class CLISelect {
   //     LATEST_ID=$(docker images | grep -E "$DOCKER_USER/$APP_NAME.*latest" | awk '{print $3}')
   //     handleError $? "Couldn't get latest image id"
   // 
-  //     versionString="v$newVersion"
+  //     versionString="v$NEW_VERSION"
   // 
   //     # log in (so the image can be pushed)
   //     docker login -u="$DOCKER_USER" -p="$DOCKER_PASS"
@@ -451,7 +439,7 @@ class CLISelect {
   //     git add CHANGELOG.md package.json package-lock.json
   //     git commit -m "Bump to $versionString"
   //     # tag all the things
-  //     gitChangeLogMsg="## $versionString"$'\n\n'"$newContent"
+  //     gitChangeLogMsg="## $versionString"$'\n\n'"$newChanges"
   //     sanitizedGitChangeLogMsg=$(echo "$gitChangeLogMsg" | sed 's/"/\\"/g')
   //     git tag -a "$versionString" -m "$gitChangeLogMsg"
   //     docker tag "$LATEST_ID" "$DOCKER_USER/$APP_NAME:$versionString"
