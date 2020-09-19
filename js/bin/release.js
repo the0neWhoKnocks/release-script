@@ -55,7 +55,7 @@ const cmd = (cmd, { silent = true } = {}) => new Promise((resolve, reject) => {
   
   child.on('close', (statusCode) => {
     if (statusCode === 0) resolve(stdout);
-    else reject(handleError(statusCode, `Command "${cmd}" failed\n${message}`));
+    else reject(handleError(statusCode, `Command "${cmd}" failed\n${stderr}`));
   });
 });
 
