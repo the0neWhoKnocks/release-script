@@ -281,7 +281,7 @@ class CLISelect {
     ],
   });
   
-  const rollbacks = [];
+  let rollbacks = [];
   async function rollbackRelease() {
     if (rollbacks.length) {
       console.log(`\n ${color.black.bgYellow(' ROLLBACK ')} release`);
@@ -293,6 +293,8 @@ class CLISelect {
         
         console.log(` - Reverted: ${color.blue.bold(label)}`);
       }
+      
+      rollbacks = [];
     }
   }
   
