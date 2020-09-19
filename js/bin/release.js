@@ -263,11 +263,11 @@ class CLISelect {
 
 (async function release() {
   const {
-    APP__NAME,
     APP__TEST_URL,
     CMD__DOCKER_BUILD,
     CMD__DOCKER_START,
     CMD__COMPILE_ASSETS,
+    DOCKER__IMG_NAME,
     PATH__CREDS__DOCKER,
     PATH__CREDS__NPM,
     PATH__REPO_ROOT,
@@ -283,6 +283,7 @@ class CLISelect {
       },
     ],
   });
+  let newChanges;
   
   let rollbacks = [];
   async function rollbackRelease() {
@@ -327,6 +328,7 @@ class CLISelect {
     ],
     selectedMsg: 'Bumping version to: %s',
   });
+  const VERSION_STR = `v${NEW_VERSION}`;
 
   // Ensure tags are up to date
   renderHeader('FETCH', 'tags');
@@ -369,7 +371,6 @@ class CLISelect {
       'Misc. Tasks': [],
       'Uncategorized': [],
     };
-    let newChanges;
     
     try {
       const TITLE_PREFIX = ': ';
@@ -400,15 +401,15 @@ class CLISelect {
     if (newChanges) {
       const changelog = originalLog.replace(
         new RegExp(`(${DEFAULT_CHANGELOG_CONTENT})`),
-        `$1\n## v${NEW_VERSION}\n\n${newChanges}\n\n---`
+        `$1\n## ${VERSION_STR}\n\n${newChanges}\n\n---`
       );
       
       if (args.dryRun) {
         dryRunCmd(`writeFileSync(\n  '${CHANGELOG_PATH}',\n${changelog}\n)`);
       }
       else {
-        rollbacks.push({ label: 'CHANGELOG', file: CHANGELOG_PATH, content: originalLog });
         writeFileSync(CHANGELOG_PATH, changelog);
+        rollbacks.push({ label: 'CHANGELOG', file: CHANGELOG_PATH, content: originalLog });
       }
     }
   }
@@ -481,72 +482,136 @@ class CLISelect {
   }
 
   if (continueRelease) {
-    // TODO --
+    renderHeader('ADD', 'updated files');
+    const ADD_CMD = 'git add CHANGELOG.md package*.json';
+    if (args.dryRun) dryRunCmd(ADD_CMD);
+    else {
+      await cmd(ADD_CMD, {
+        cwd: PATH__REPO_ROOT,
+        onError: rollbackRelease,
+        silent: false,
+      });
+      rollbacks.push({ label: 'Staged changes', cmd: 'git reset' });
+    }
+
+    renderHeader('COMMIT', 'updated files');
+    const COMMIT_CMD = `git commit -m "Bump to ${VERSION_STR}"`;
+    if (args.dryRun) dryRunCmd(COMMIT_CMD);
+    else {
+      await cmd(COMMIT_CMD, {
+        cwd: PATH__REPO_ROOT,
+        onError: rollbackRelease,
+        silent: false,
+      });
+      rollbacks.push({ label: 'Bump commit', cmd: 'git reset --soft HEAD~1' });
+    }
+    
+    renderHeader('GIT_TAG', 'the release');
+    const GIT_CHANGELOG_MSG = `## ${VERSION_STR}\n\n${newChanges}`.replace(/"/g, '\\"');
+    const GIT_TAG_CMD = `git tag -a "${VERSION_STR}" -m "${GIT_CHANGELOG_MSG}"`;
+    if (args.dryRun) dryRunCmd(GIT_TAG_CMD);
+    else {
+      await cmd(GIT_TAG_CMD, {
+        cwd: PATH__REPO_ROOT,
+        onError: rollbackRelease,
+        silent: false,
+      });
+      rollbacks.push({ label: 'Git tag', cmd: `git tag -d "${VERSION_STR}"` });
+    }
+    
+    let DOCKER_USER, DOCKER_PASS, DOCKER_LOGIN_CMD, DOCKER_TAG;
+    if (PATH__CREDS__DOCKER) {
+      [DOCKER_USER, DOCKER_PASS] = readFileSync(PATH__CREDS__DOCKER, 'utf8').split('\n');
+      const LATEST_REGEX = new RegExp(`^${DOCKER__IMG_NAME}.*latest`);
+      const LATEST_ID = (await cmd('docker images')).split('\n').filter(line => LATEST_REGEX.test(line)).map(line => line.split(/\s+/)[2])[0];
+      DOCKER_LOGIN_CMD = `docker login -u="${DOCKER_USER}" -p="${DOCKER_PASS}"`;
+      DOCKER_TAG = `${DOCKER__IMG_NAME}:${VERSION_STR}`;
+      
+      renderHeader('DOCKER_TAG', 'the release');
+      const DOCKER_TAG_CMD = `docker tag "${LATEST_ID}" "${DOCKER_TAG}"`;
+      if (args.dryRun) dryRunCmd(DOCKER_TAG_CMD);
+      else {
+        await cmd(DOCKER_TAG_CMD, {
+          cwd: PATH__REPO_ROOT,
+          onError: rollbackRelease,
+          silent: false,
+        });
+        rollbacks.push({ label: 'Docker tag', cmd: `docker rmi "${DOCKER_TAG}"` });
+      }
+    }
+    
+    renderHeader('PUSH', 'Git commit and tag');
+    const GIT_PUSH_CMD = 'git push --follow-tags';
+    if (args.dryRun) dryRunCmd(GIT_PUSH_CMD);
+    else {
+      await cmd(GIT_PUSH_CMD, {
+        cwd: PATH__REPO_ROOT,
+        onError: rollbackRelease,
+        silent: false,
+      });
+    }
+    
+    renderHeader('PUSH', 'Docker tags');
+    const DOCKER_PUSH_CMD = `${DOCKER_LOGIN_CMD}`
+      +` && docker push "${DOCKER_TAG}"`
+      +` && docker push "${DOCKER__IMG_NAME}:latest"`;
+    if (args.dryRun) dryRunCmd(DOCKER_PUSH_CMD);
+    else {
+      await cmd(DOCKER_PUSH_CMD, {
+        cwd: PATH__REPO_ROOT,
+        silent: false,
+      });
+    }
+    
+    const GITHUB_TOKEN = await cmd('git config --global github.token');
+    if (GITHUB_TOKEN) {
+      const REMOTE_ORIGIN_URL = await cmd('git config --get remote.origin.url');
+      const urlMatches = REMOTE_ORIGIN_URL.match(/^(https|git)(:\/\/|@)([^\/:]+)[\/:]([^\/:]+)\/(.+).git$/);
+      
+      renderHeader('CREATE', 'GitHub release');
+      
+      if (urlMatches) {
+        const BRANCH = await cmd('git rev-parse --abbrev-ref HEAD');
+        const JSON_PAYLOAD = JSON.stringify({
+          body: GIT_CHANGELOG_MSG,
+          draft: false,
+          name: VERSION_STR,
+          prerelease: false,
+          tag_name: VERSION_STR,
+          target_commitish: BRANCH,
+        });
+        const GH_USER = urlMatches[4];
+        const GH_REPO = urlMatches[5];
+        const GH_API__RELEASE_URL = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/releases`;
+        // https://developer.github.com/v3/repos/releases/#create-a-release
+        const CURL_CMD = [
+          'curl',
+          '-H "Content-Type: application/json"',
+          `-H "Authorization: token ${GITHUB_TOKEN}"`,
+          '-X POST',
+          `-d '${JSON_PAYLOAD.replace(/'/g, "\\'")}'`,
+          '--silent --output /dev/null --show-error --fail',
+          GH_API__RELEASE_URL,
+        ].join(' ');
+        
+        if (args.dryRun) {
+          console.log(
+               `  ${color.green('Payload')}: ${JSON.stringify(JSON.parse(JSON_PAYLOAD), null, 2)}`
+            +`\n  ${color.green('URL')}: ${color.blue.bold.underline(GH_API__RELEASE_URL)}`
+          );
+          dryRunCmd(CURL_CMD);
+        }
+        else await cmd(CURL_CMD, { silent: false });
+      }
+      else {
+        console.log(`\n ${color.black.bgYellow(' WARN ')} ${color.yellow("Couldn't parse the origin URL for GH release creation")}`);
+      }
+    }
+    else {
+      console.log(`\n ${color.black.bgYellow(' WARN ')} ${color.yellow('Skipping GH release creation: No GH token found')}`);
+    }
   }
   else {
     await rollbackRelease();
   }
-  
-  //   if [[ "$continueRelease" != "" ]]; then
-  //     LATEST_ID=$(docker images | grep -E "$DOCKER_USER/$APP_NAME.*latest" | awk '{print $3}')
-  //     handleError $? "Couldn't get latest image id"
-  // 
-  //     versionString="v$NEW_VERSION"
-  // 
-  //     # log in (so the image can be pushed)
-  //     docker login -u="$DOCKER_USER" -p="$DOCKER_PASS"
-  //     handleError $? "Couldn't log in to Docker"
-  //     # add and commit relevant changes
-  //     git add CHANGELOG.md package.json package-lock.json
-  //     git commit -m "Bump to $versionString"
-  //     # tag all the things
-  //     gitChangeLogMsg="## $versionString"$'\n\n'"$newChanges"
-  //     sanitizedGitChangeLogMsg=$(echo "$gitChangeLogMsg" | sed 's/"/\\"/g')
-  //     git tag -a "$versionString" -m "$gitChangeLogMsg"
-  //     docker tag "$LATEST_ID" "$DOCKER_USER/$APP_NAME:$versionString"
-  //     handleError $? "Couldn't tag Docker image"
-  //     # push up the tags
-  //     git push --follow-tags
-  //     docker push "$DOCKER_USER/$APP_NAME:$versionString"
-  //     docker push "$DOCKER_USER/$APP_NAME:latest"
-  //     # create an actual release
-  //     ghToken=$(git config --global github.token)
-  //     if [[ "$ghToken" != "" ]]; then
-  //       echo;
-  //       echo "[ CREATE ] GitHub Release ========================="
-  //       echo;
-  // 
-  //       branch=$(git rev-parse --abbrev-ref HEAD)
-  // 
-  //       remoteOriginURL=$(git config --get remote.origin.url)
-  //       regEx="^(https|git)(:\/\/|@)([^\/:]+)[\/:]([^\/:]+)\/(.+).git$"
-  //       if [[ "$remoteOriginURL" =~ $regEx ]]; then
-  //         user=${BASH_REMATCH[4]}
-  //         repo=${BASH_REMATCH[5]}
-  //       fi
-  // 
-  //       jsonPayload="{ \"tag_name\": \"$versionString\", \"target_commitish\": \"$branch\", \"name\": \"$versionString\", \"body\": \"$sanitizedGitChangeLogMsg\", \"draft\": false, \"prerelease\": false }"
-  //       # encode newlines for JSON
-  //       jsonPayload=$(echo "$jsonPayload" | sed -z 's/\n/\\n/g')
-  //       # remove trailing newline
-  //       jsonPayload=${jsonPayload%$'\\n'}
-  // 
-  //       releaseApiURL="https://api.github.com/repos/$user/$repo/releases"
-  // 
-  //       echo "  Payload: $jsonPayload"
-  //       echo "  URL: \"$releaseApiURL\""
-  // 
-  //       # https://developer.github.com/v3/repos/releases/#create-a-release
-  //       curl \
-  //         -H "Content-Type: application/json" \
-  //         -H "Authorization: token $ghToken" \
-  //         -X POST \
-  //         -d "$jsonPayload" \
-  //         --silent --output /dev/null --show-error --fail \
-  //         "$releaseApiURL"
-  //       handleError $? "Couldn't promote tag to a release"
-  //     else
-  //       echo "[WARN] Skipping GH release creation: No GH token found";
-  //     fi
-  //   fi
 })();

@@ -1,8 +1,6 @@
 const { resolve } = require('path');
 
 module.exports = {
-  // Common name shared for Docker image, NPM module, etc.
-  APP__NAME: 'hello-world',
   // URL that the App will be available at once started.
   APP__TEST_URL: 'http://localhost:3000',
   // Command to build specific or all Docker containers
@@ -11,6 +9,8 @@ module.exports = {
   CMD__DOCKER_START: 'docker-compose up -d',
   // Command to compile any assets that may be needed by Docker, shipped off to S3, etc.
   CMD__COMPILE_ASSETS: 'npm run compile',
+  // Name of the Docker image: <DOCKER_USER>/<NAME>
+  DOCKER__IMG_NAME: 'hello-world',
   // An absolute path to a file containing a DockerHub username & password
   PATH__CREDS__DOCKER: resolve(__dirname, '.creds-docker'),
   // An absolute path to a file containing an NPM username & password
