@@ -253,9 +253,9 @@ class CLISelect {
   const {
     APP__NAME,
     APP__TEST_URL,
-    CMD__BUILD,
-    CMD__COMPILE,
-    CMD__START,
+    CMD__DOCKER_BUILD,
+    CMD__DOCKER_START,
+    CMD__COMPILE_ASSETS,
     PATH__CREDS__DOCKER,
     PATH__CREDS__NPM,
     PATH__REPO_ROOT,
@@ -392,14 +392,12 @@ class CLISelect {
   if (args.dryRun) dryRunCmd(NPM_BUMP_CMD);
   else await cmd(NPM_BUMP_CMD, { cwd: PATH__REPO_ROOT, silent: false });
   
-  //   if [[ "$COMPILE_CMD" != "" ]]; then
-  //     echo;
-  //     echo "[ COMPILE ] code ========================="
-  //     echo;
-  //     $COMPILE_CMD
-  //     handleError $? "Couldn't compile with new version."
-  //   fi
-  // 
+  if (CMD__COMPILE_ASSETS) {
+    renderHeader('COMPILE', 'assets');
+    if (args.dryRun) dryRunCmd(CMD__COMPILE_ASSETS);
+    else await cmd(CMD__COMPILE_ASSETS, { cwd: PATH__REPO_ROOT, silent: false });
+  }
+  
   //   echo;
   //   echo "[ BUILD ] Docker Image ========================="
   //   echo;
