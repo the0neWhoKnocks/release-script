@@ -30,12 +30,12 @@ const color = (() => {
 
 function handleError(exitCode, errMsg) {
   if (exitCode > 0) {
-    console.error(`\n${color.black.bgRed(' ERROR ')} ${color.red(errMsg)}`);
+    console.error(`\n ${color.black.bgRed(' ERROR ')} ${color.red(errMsg)}`);
     process.exit(exitCode);
   }
 }
 
-const cmd = (cmd, { cwd, silent = true } = {}) => new Promise((resolve, reject) => {
+const cmd = (cmd, { cwd, onError, silent = true } = {}) => new Promise((resolve, reject) => {
   const { spawn } = require('child_process');
   const opts = { cwd };
   const child = spawn('sh', ['-c', cmd], opts);
@@ -54,14 +54,23 @@ const cmd = (cmd, { cwd, silent = true } = {}) => new Promise((resolve, reject) 
     stderr += err;
   });
   
-  child.on('close', (statusCode) => {
+  child.on('close', async (statusCode) => {
     if (statusCode === 0) resolve(
       stdout
         .split('\n')
         .filter(line => !!line.trim())
         .join('\n')
     );
-    else reject(handleError(statusCode, `Command "${cmd}" failed\n${stderr}`));
+    else {
+      if (onError) {
+        if (onError.constructor.name === 'AsyncFunction') await onError(stderr);
+        else onError(stderr);
+      }
+      
+      const errMsg = `Command "${cmd}" failed\n${stderr}`;
+      reject(errMsg);
+      handleError(statusCode, errMsg);
+    }
   });
 });
 
@@ -272,18 +281,31 @@ class CLISelect {
     ],
   });
   
+  const rollbacks = [];
+  async function rollbackRelease() {
+    console.log(`\n ${color.black.bgYellow(' ROLLBACK ')} release`);
+    // changes may have been additive, so roll things back from the end to the start
+    for (let i=rollbacks.length - 1; i>=0; i--) {
+      const { cmd: _cmd, content, file, label } = rollbacks[i];
+      if (_cmd) await cmd(_cmd, { cwd: PATH__REPO_ROOT });
+      else if (file) writeFileSync(file, content);
+      
+      console.log(` - Reverted: ${color.blue.bold(label)}`);
+    } 
+  }
+  
   function dryRunCmd(_cmd) {
     console.log(`\n ${color.black.bgYellow(' DRYRUN ')} ${color.blue.bold(_cmd)}`);
   }
 
   // Get current version number
-  const CURRENT_VERSION = PACKAGE_JSON.version;
+  const ORIGINAL_VERSION = PACKAGE_JSON.version;
   const REPO_URL = (await cmd('git config --get remote.origin.url'))
     .replace(/^git@/, 'https://')
     .replace('.com:', '.com/')
     .replace(/\.git$/, '');
   // Build out what the version would be based on what the user chooses
-  const VERSION_NUMS = CURRENT_VERSION.split('.');
+  const VERSION_NUMS = ORIGINAL_VERSION.split('.');
   const MAJOR = `${+VERSION_NUMS[0] + 1}.0.0`;
   const MINOR = `${VERSION_NUMS[0]}.${+VERSION_NUMS[1] + 1}.0`;
   const PATCH = `${VERSION_NUMS[0]}.${VERSION_NUMS[1]}.${+VERSION_NUMS[2] + 1}`;
@@ -298,10 +320,6 @@ class CLISelect {
     ],
     selectedMsg: 'Bumping version to: %s',
   });
-  const BUMP_TYPE =
-       NEW_VERSION === PATCH && 'patch'
-    || NEW_VERSION === MINOR && 'minor'
-    || NEW_VERSION === MAJOR && 'major';
 
   // Ensure tags are up to date
   renderHeader('FETCH', 'tags');
@@ -382,20 +400,30 @@ class CLISelect {
         dryRunCmd(`writeFileSync(\n  '${CHANGELOG_PATH}',\n${changelog}\n)`);
       }
       else {
+        rollbacks.push({ label: 'CHANGELOG', file: CHANGELOG_PATH, content: originalLog });
         writeFileSync(CHANGELOG_PATH, changelog);
       }
     }
   }
   
   renderHeader('BUMP', 'Node package version');
-  const NPM_BUMP_CMD = `npm version --no-git-tag-version ${BUMP_TYPE}`;
+  rollbacks.push({ label: 'Node package version', cmd: `npm version --no-git-tag-version ${ORIGINAL_VERSION}` });
+  const NPM_BUMP_CMD = `npm version --no-git-tag-version ${NEW_VERSION}`;
   if (args.dryRun) dryRunCmd(NPM_BUMP_CMD);
-  else await cmd(NPM_BUMP_CMD, { cwd: PATH__REPO_ROOT, silent: false });
+  else await cmd(NPM_BUMP_CMD, {
+    cwd: PATH__REPO_ROOT,
+    onError: rollbackRelease,
+    silent: false,
+  });
   
   if (CMD__COMPILE_ASSETS) {
     renderHeader('COMPILE', 'assets');
     if (args.dryRun) dryRunCmd(CMD__COMPILE_ASSETS);
-    else await cmd(CMD__COMPILE_ASSETS, { cwd: PATH__REPO_ROOT, silent: false });
+    else await cmd(CMD__COMPILE_ASSETS, {
+      cwd: PATH__REPO_ROOT,
+      onError: rollbackRelease,
+      silent: false,
+    });
   }
   
   //   echo;
