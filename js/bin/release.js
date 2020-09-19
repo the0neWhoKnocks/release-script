@@ -237,7 +237,7 @@ class CLISelect {
   enter() {
     this.selection = this.rawOptions[this.selectedOptionNdx][1];
     this.reset();
-    console.log(`\n ${this.selectedMsg.replace('%s', color.blue.bold(this.selection))}\n`);
+    if (this.selectedMsg) console.log(`\n ${this.selectedMsg.replace('%s', color.blue.bold(this.selection))}\n`);
     this.resolveSelection(this.selection);
   }
 
