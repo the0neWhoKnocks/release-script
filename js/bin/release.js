@@ -10,18 +10,21 @@ const color = (() => {
   const colorize = /^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(process.env.TERM) && tty.isatty(1);
 
   function CLIColor(str = '') {
-    const RESET = colorize ? '\x1b[0m' : '';
+    const CSI = '\x1b['; // Control Sequence Introducer, read more: https://notes.burke.libbey.me/ansi-escape-codes/#:~:text=ANSI%20escapes%20always%20start%20with,and%20this%20is%20basically%20why.
+    const RESET = colorize ? `${CSI}0m` : '';
     const api = ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white'].reduce((obj, color, index) => {
       // foreground
-      obj[color] = { get() { return CLIColor(colorize ? `${str}\x1b[${30 + index}m` : str); } };
-      obj[`${color}Bright`] = { get() { return CLIColor(colorize ? `${str}\x1b[${90 + index}m` : str); } };
+      obj[color] = { get() { return CLIColor(colorize ? `${str}${CSI}${30 + index}m` : str); } };
+      obj[`${color}Bright`] = { get() { return CLIColor(colorize ? `${str}${CSI}${90 + index}m` : str); } };
       // background
-      obj[`bg${color[0].toUpperCase() + color.slice(1)}`] = { get() { return CLIColor(colorize ? `${str}\x1b[${40 + index}m` : str); } };
-      obj[`bg${color[0].toUpperCase() + color.slice(1)}Bright`] = { get() { return CLIColor(colorize ? `${str}\x1b[${100 + index}m` : str); } };
+      obj[`bg${color[0].toUpperCase() + color.slice(1)}`] = { get() { return CLIColor(colorize ? `${str}${CSI}${40 + index}m` : str); } };
+      obj[`bg${color[0].toUpperCase() + color.slice(1)}Bright`] = { get() { return CLIColor(colorize ? `${str}${CSI}${100 + index}m` : str); } };
 
       return obj;
     }, {});
-    api.bold = { get() { return CLIColor(colorize ? `${str}\x1b[1m` : str); } };
+    api.bold = { get() { return CLIColor(colorize ? `${str}${CSI}1m` : str); } };
+    api.italic = { get() { return CLIColor(colorize ? `${str}${CSI}3m` : str); } };
+    api.underline = { get() { return CLIColor(colorize ? `${str}${CSI}4m` : str); } };
 
     return Object.defineProperties(msg => `${str}${msg}${RESET}`, api);
   }
@@ -458,7 +461,7 @@ class CLISelect {
   }
   
   const continueRelease = await new CLISelect({
-    label: `${color.green('Verify things are running properly at')}: ${color.blue.bold(APP__TEST_URL)}`,
+    label: `${color.green('Verify things are running properly at')}: ${color.blue.bold.underline(APP__TEST_URL)}`,
     options: [
       ['Continue with release', true],
       ['Abort release', false],
