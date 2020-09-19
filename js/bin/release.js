@@ -228,7 +228,7 @@ class CLISelect {
     process.stdin.pause();
     CLISelect.showCursor();
     
-    if (!this.selection) {
+    if (this.selection === undefined) {
       this.resolveSelection();
       process.exit(0);
     }
