@@ -10,7 +10,7 @@ module.exports = {
   // Command to start the built Container(s), so a Dev can verify before it's deployed
   CMD__DOCKER_START: '<START_DOCKER_CMD>',
   // Command to compile any assets that may be needed by Docker, shipped off to S3, etc.
-  CMD__COMPILE_ASSETS: '<COMPILE_ASSETS_CMD>',
+  CMD__COMPILE_ASSETS: 'npm run compile',
   // An absolute path to a file containing a DockerHub username & password
   PATH__CREDS__DOCKER: resolve(__dirname, '.creds-docker'),
   // An absolute path to a file containing an NPM username & password
