@@ -298,6 +298,10 @@ class CLISelect {
     ],
     selectedMsg: 'Bumping version to: %s',
   });
+  const BUMP_TYPE =
+       NEW_VERSION === PATCH && 'patch'
+    || NEW_VERSION === MINOR && 'minor'
+    || NEW_VERSION === MAJOR && 'major';
 
   // Ensure tags are up to date
   renderHeader('FETCH', 'tags');
@@ -382,10 +386,12 @@ class CLISelect {
       }
     }
   }
-  // 
-  //   npm version --no-git-tag-version $bump
-  //   handleError $? "Couldn't bump version number."
-  // 
+  
+  renderHeader('BUMP', 'Node package version');
+  const NPM_BUMP_CMD = `npm version --no-git-tag-version ${BUMP_TYPE}`;
+  if (args.dryRun) dryRunCmd(NPM_BUMP_CMD);
+  else await cmd(NPM_BUMP_CMD, { cwd: PATH__REPO_ROOT, silent: false });
+  
   //   if [[ "$COMPILE_CMD" != "" ]]; then
   //     echo;
   //     echo "[ COMPILE ] code ========================="
