@@ -35,9 +35,10 @@ function handleError(exitCode, errMsg) {
   }
 }
 
-const cmd = (cmd, { silent = true } = {}) => new Promise((resolve, reject) => {
+const cmd = (cmd, { cwd, silent = true } = {}) => new Promise((resolve, reject) => {
   const { spawn } = require('child_process');
-  const child = spawn('sh', ['-c', cmd]);
+  const opts = { cwd };
+  const child = spawn('sh', ['-c', cmd], opts);
   let stdout = '';
   let stderr = '';
   
