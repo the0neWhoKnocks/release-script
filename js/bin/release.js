@@ -445,33 +445,43 @@ class CLISelect {
     });
   }
   
-  //   echo;
-  //   echo "[ START ] Docker Image ========================="
-  //   echo;
-  //   # Run the new image
-  //   $START_CMD
-  //   handleError $? "Couldn't start Docker image"
-  // 
-  //   exec < /dev/tty
-  //   echo;
-  //   echo " Verify things are running properly at $APP_URL"
-  //   echo;
-  //   echo " (1) Continue"
-  //   echo " (2) Abort"
-  //   echo;
-  // 
-  //   read response
-  // 
-  //   case $response in
-  //     1)
-  //       continueRelease="true"
-  //       ;;
-  //   esac
-  //   exec <&-
-  // 
-  //   # Stops the image and cleans things up
-  //   docker-compose down
-  // 
+  renderHeader('START', 'App');
+  if (CMD__DOCKER_START) {
+    if (args.dryRun) dryRunCmd(CMD__DOCKER_START);
+    else {
+      await cmd(CMD__DOCKER_START, {
+        cwd: PATH__REPO_ROOT,
+        onError: rollbackRelease,
+        silent: false,
+      });
+    }
+  }
+  
+  const continueRelease = await new CLISelect({
+    label: `${color.green('Verify things are running properly at')}: ${color.blue.bold(APP__TEST_URL)}`,
+    options: [
+      ['Continue with release', true],
+      ['Abort release', false],
+    ],
+    selectedMsg: null,
+  });
+  
+  renderHeader('STOP', 'App');
+  if (CMD__DOCKER_START) {
+    await cmd('docker-compose down', {
+      cwd: PATH__REPO_ROOT,
+      onError: rollbackRelease,
+      silent: false,
+    });
+  }
+
+  if (continueRelease) {
+    // TODO --
+  }
+  else {
+    await rollbackRelease();
+  }
+  
   //   if [[ "$continueRelease" != "" ]]; then
   //     LATEST_ID=$(docker images | grep -E "$DOCKER_USER/$APP_NAME.*latest" | awk '{print $3}')
   //     handleError $? "Couldn't get latest image id"
@@ -533,10 +543,5 @@ class CLISelect {
   //     else
   //       echo "[WARN] Skipping GH release creation: No GH token found";
   //     fi
-  //   else
-  //     # reset changelog
-  //     echo "$originalLog" > "$filename"
-  //     # reset version bump
-  //     npm version --no-git-tag-version "$VERSION"
   //   fi
 })();
