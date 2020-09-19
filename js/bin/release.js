@@ -471,11 +471,13 @@ class CLISelect {
   
   renderHeader('STOP', 'App');
   if (CMD__DOCKER_START) {
-    await cmd('docker-compose down', {
-      cwd: PATH__REPO_ROOT,
-      onError: rollbackRelease,
-      silent: false,
-    });
+    if (!args.dryRun) {
+      await cmd('docker-compose down', {
+        cwd: PATH__REPO_ROOT,
+        onError: rollbackRelease,
+        silent: false,
+      });
+    }
   }
 
   if (continueRelease) {
