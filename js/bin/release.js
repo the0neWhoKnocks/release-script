@@ -54,7 +54,12 @@ const cmd = (cmd, { silent = true } = {}) => new Promise((resolve, reject) => {
   });
   
   child.on('close', (statusCode) => {
-    if (statusCode === 0) resolve(stdout);
+    if (statusCode === 0) resolve(
+      stdout
+        .split('\n')
+        .filter(line => !!line.trim())
+        .join('\n')
+    );
     else reject(handleError(statusCode, `Command "${cmd}" failed\n${stderr}`));
   });
 });
