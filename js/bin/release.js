@@ -283,15 +283,17 @@ class CLISelect {
   
   const rollbacks = [];
   async function rollbackRelease() {
-    console.log(`\n ${color.black.bgYellow(' ROLLBACK ')} release`);
-    // changes may have been additive, so roll things back from the end to the start
-    for (let i=rollbacks.length - 1; i>=0; i--) {
-      const { cmd: _cmd, content, file, label } = rollbacks[i];
-      if (_cmd) await cmd(_cmd, { cwd: PATH__REPO_ROOT });
-      else if (file) writeFileSync(file, content);
-      
-      console.log(` - Reverted: ${color.blue.bold(label)}`);
-    } 
+    if (rollbacks.length) {
+      console.log(`\n ${color.black.bgYellow(' ROLLBACK ')} release`);
+      // changes may have been additive, so roll things back from the end to the start
+      for (let i=rollbacks.length - 1; i>=0; i--) {
+        const { cmd: _cmd, content, file, label } = rollbacks[i];
+        if (_cmd) await cmd(_cmd, { cwd: PATH__REPO_ROOT });
+        else if (file) writeFileSync(file, content);
+        
+        console.log(` - Reverted: ${color.blue.bold(label)}`);
+      }
+    }
   }
   
   function dryRunCmd(_cmd) {
