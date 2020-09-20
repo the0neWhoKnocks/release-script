@@ -13,8 +13,6 @@ module.exports = {
   DOCKER__IMG_NAME: 'hello-world',
   // An absolute path to a file containing a DockerHub username & password
   PATH__CREDS__DOCKER: resolve(__dirname, '.creds-docker'),
-  // An absolute path to a file containing an NPM username & password
-  PATH__CREDS__NPM: resolve(__dirname, '.creds-npm'),
   // An absolute path to the root of your repo
   PATH__REPO_ROOT: resolve(__dirname, '../'),
 };
