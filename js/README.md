@@ -3,18 +3,21 @@
 
 ## Install
 
-**IMPORTANT**: This script requires Node 12 or above.
+**Prerequisites**:
+- Your repo is already set up. The script keys off of info in your `package.json`
+and your git config.
+- You have `curl` installed. Otherwise the install/update scripts can't download
+the release script files. 
 
-TODO
-  - add wget/curl script for initial "clone"
-    - something like on-my-zsh `sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"`
-  - add script to pull based on version
+Run the below command
+```sh
+sh -c "$(curl -fsSL https://github.com/the0neWhoKnocks/release-script/tree/master/js/tools/install.sh)"
 
-- If you want it to be part of your `package.json` scripts, add a reference to
-the script:
-   ```json
-   "release": "node ./bin/release.js",
-   ```
+# If you don't want to install to the default `./bin` folder
+sh -c "$(curl -fsSL https://github.com/the0neWhoKnocks/release-script/tree/master/js/tools/install.sh) --install-dir \"some/other/folder\""
+```
+
+---
 
 ## Run
 
@@ -24,4 +27,25 @@ the script:
 npm run release
 # or
 yarn release
+
+# View all available flags by adding `--help` or `-h`
+./bin/release.js -h
+# or
+npm run release -- -h
+# or
+yarn release -h
+```
+
+---
+
+## Update
+
+It's the same as the Install step, with an added flag
+
+Run the below command
+```sh
+sh -c "$(curl -fsSL https://github.com/the0neWhoKnocks/release-script/tree/master/js/tools/install.sh) --update"
+
+# If you had a custom install directory
+sh -c "$(curl -fsSL https://github.com/the0neWhoKnocks/release-script/tree/master/js/tools/install.sh) --update --install-dir \"some/other/folder\""
 ```
