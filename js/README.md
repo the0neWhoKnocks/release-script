@@ -11,10 +11,10 @@ the release script files.
 
 Run the below command
 ```sh
-sh -c "$(curl -fsSL https://github.com/the0neWhoKnocks/release-script/tree/master/js/tools/install.sh)"
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh)"
 
 # If you don't want to install to the default `./bin` folder
-sh -c "$(curl -fsSL https://github.com/the0neWhoKnocks/release-script/tree/master/js/tools/install.sh) --install-dir \"some/other/folder\""
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --install-dir \"some/other/folder\""
 ```
 
 ---
@@ -44,8 +44,8 @@ It's the same as the Install step, with an added flag
 
 Run the below command
 ```sh
-sh -c "$(curl -fsSL https://github.com/the0neWhoKnocks/release-script/tree/master/js/tools/install.sh) --update"
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --update"
 
 # If you had a custom install directory
-sh -c "$(curl -fsSL https://github.com/the0neWhoKnocks/release-script/tree/master/js/tools/install.sh) --update --install-dir \"some/other/folder\""
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --update --install-dir \"some/other/folder\""
 ```
