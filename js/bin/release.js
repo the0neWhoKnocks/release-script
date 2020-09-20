@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 const { existsSync, readFileSync, writeFileSync } = require('fs');
-const { resolve } = require('path');
 
 // Boilerplate =================================================================
 
@@ -269,7 +268,6 @@ class CLISelect {
     CMD__COMPILE_ASSETS,
     DOCKER__IMG_NAME,
     PATH__CREDS__DOCKER,
-    PATH__CREDS__NPM,
     PATH__REPO_ROOT,
   } = require('./release-config.js');
   const PACKAGE_JSON = require(`${PATH__REPO_ROOT}/package.json`);
@@ -566,7 +564,7 @@ class CLISelect {
     const GITHUB_TOKEN = await cmd('git config --global github.token');
     if (GITHUB_TOKEN) {
       const REMOTE_ORIGIN_URL = await cmd('git config --get remote.origin.url');
-      const urlMatches = REMOTE_ORIGIN_URL.match(/^(https|git)(:\/\/|@)([^\/:]+)[\/:]([^\/:]+)\/(.+).git$/);
+      const urlMatches = REMOTE_ORIGIN_URL.match(/^(https|git)(:\/\/|@)([^/:]+)[/:]([^/:]+)\/(.+).git$/);
       
       renderHeader('CREATE', 'GitHub release');
       
