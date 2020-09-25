@@ -338,11 +338,15 @@ class CLISelect {
   await cmd('git fetch --tags', { silent: false });
   
   // Get previous tag info so that the changelog can be updated.
-  let latestTag;
+  let latestTagOrSHA;
+  renderHeader('GET', 'latest tag or SHA');
   if (await cmd('git tag -l')) {
-    renderHeader('GET', 'latest tag');
-    latestTag = await cmd('git tag -l | tail -n1');
-    console.log(`\n Latest tag: ${color.blue.bold(latestTag)}`);
+    latestTagOrSHA = await cmd('git describe --abbrev=0');
+    console.log(`\n Latest tag: ${color.blue.bold(latestTagOrSHA)}`);
+  }
+  else {
+    latestTagOrSHA = await cmd('git rev-parse --short $(git rev-list --max-parents=0 HEAD)');
+    console.log(`\n No tags found, using first SHA: ${color.blue.bold(latestTagOrSHA)}`);
   }
 
   // Run tests if they exist
@@ -355,7 +359,7 @@ class CLISelect {
       : await cmd(testCmd, { silent: false });
   }
   
-  if (latestTag) {
+  if (latestTagOrSHA) {
     renderHeader('ADD', 'new CHANGELOG items');
     
     const CHANGELOG_PATH = `${PATH__REPO_ROOT}/CHANGELOG.md`;
@@ -366,7 +370,7 @@ class CLISelect {
     }
 
     // const commits = await cmd('git log "v3.1.0".."v4.0.0" --oneline');
-    const commits = await cmd(`git log "${latestTag}"..HEAD --oneline`);
+    const commits = await cmd(`git log "${latestTagOrSHA}"..HEAD --oneline`);
     const categories = {
       'Bugfixes': [],
       'Dev-Ops': [],
