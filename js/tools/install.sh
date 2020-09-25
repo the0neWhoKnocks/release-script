@@ -125,7 +125,7 @@ install() {
     
     package.scripts.release = './${INSTALL_DIR}/release.js';
     package.scripts['release:dryrun'] = './${INSTALL_DIR}/release.js -dr';
-    package.scripts['release:update'] = 'sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --update --install-dir \\\\\"./${INSTALL_DIR}\\\\\"\"';
+    package.scripts['release:update'] = 'sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --update --install-dir \\\\\"${INSTALL_DIR}\\\\\"\"';
     
     writeFileSync(resolve(__dirname, 'package.json'), JSON.stringify(package, null, 2));
   "
