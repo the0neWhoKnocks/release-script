@@ -110,20 +110,25 @@ install() {
       && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release-config.js" \
       && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release.js"
     )
-    
-    # Add package.json scripts
-    echo "   2. Adding ${BLUE}package.json${RESET} scripts"
-    node -e "
-      const { writeFileSync } = require('fs');
-      const { resolve } = require('path');
-      const package = require('./package.json');
-      
-      package.scripts.release = \`./${INSTALL_DIR}/release.js\`;
-      package.scripts['release:dryrun'] = \`./${INSTALL_DIR}/release.js -dr\`;
-      
-      writeFileSync(resolve(__dirname, 'package.json'), JSON.stringify(package, null, 2));
-    "
   fi
+  
+  # Add package.json scripts
+  if ${UPDATING}; then
+    echo "   2. Updating ${BLUE}package.json${RESET} scripts"
+  else
+    echo "   2. Adding ${BLUE}package.json${RESET} scripts"
+  fi
+  node -e "
+    const { writeFileSync } = require('fs');
+    const { resolve } = require('path');
+    const package = require('./package.json');
+    
+    package.scripts.release = './${INSTALL_DIR}/release.js';
+    package.scripts['release:dryrun'] = './${INSTALL_DIR}/release.js -dr';
+    package.scripts['release:update'] = 'sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --update --install-dir \\\\\"./${INSTALL_DIR}\\\\\"\"';
+    
+    writeFileSync(resolve(__dirname, 'package.json'), JSON.stringify(package, null, 2));
+  "
   
   echo;
   echo " ${GREEN}All done${RESET}"
