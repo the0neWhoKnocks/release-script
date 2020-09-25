@@ -15,6 +15,9 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-sc
 
 # If you don't want to install to the default `./bin` folder
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --install-dir \"some/other/folder\""
+
+# If you want to force an install
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --force"
 ```
 
 ---
