@@ -54,10 +54,14 @@ exitIfFound() {
 install() {
   FIRST_MSG_PREFIX="Installing"
   UPDATING=false
+  FORCE_INSTALL=false
   
   # Parse arguments
   while [ $# -gt 0 ]; do
     case $1 in
+      --force)
+        FORCE_INSTALL=true
+        ;;
       --install-dir)
         INSTALL_DIR=$2
         shift
@@ -72,8 +76,8 @@ install() {
   
   ABS_INSTALL_DIR="${PWD}/${INSTALL_DIR}"
   
-  if ! ${UPDATING}; then
-    exitIfFound "${INSTALL_DIR}/release.js" "The release script is already installed."
+  if ! ${UPDATING} && ! ${FORCE_INSTALL}; then
+    exitIfFound "${INSTALL_DIR}/release.js" "The release script is already installed.\n\n If you want to install anyway, use the '--force' flag."
   fi
   
   echo;
