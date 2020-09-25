@@ -279,6 +279,11 @@ class CLISelect {
         flag: ['--dry-run', '-dr'],
         desc: "Prints out everything that'll happen. Won't actually deploy any code.",
       },
+      {
+        prop: 'showCreds',
+        flag: ['--show-credentials', '-sc'],
+        desc: "Prints credentials, despite being run with --dry-run.",
+      },
     ],
   });
   let newChanges;
@@ -522,6 +527,12 @@ class CLISelect {
       [DOCKER_USER, DOCKER_PASS] = readFileSync(PATH__CREDS__DOCKER, 'utf8').split('\n');
       const LATEST_REGEX = new RegExp(`^${DOCKER__IMG_NAME}.*latest`);
       const LATEST_ID = (await cmd('docker images')).split('\n').filter(line => LATEST_REGEX.test(line)).map(line => line.split(/\s+/)[2])[0];
+      
+      if (args.dryRun && !args.showCreds) {
+        DOCKER_USER = '******';
+        DOCKER_PASS = '******';
+      }
+      
       DOCKER_LOGIN_CMD = `docker login -u="${DOCKER_USER}" -p="${DOCKER_PASS}"`;
       DOCKER_TAG = `${DOCKER__IMG_NAME}:${VERSION_STR}`;
       
@@ -561,8 +572,10 @@ class CLISelect {
       });
     }
     
-    const GITHUB_TOKEN = await cmd('git config --global github.token');
+    let GITHUB_TOKEN = await cmd('git config --global github.token');
     if (GITHUB_TOKEN) {
+      if (args.dryRun && !args.showCreds) GITHUB_TOKEN = '******';
+      
       const REMOTE_ORIGIN_URL = await cmd('git config --get remote.origin.url');
       const urlMatches = REMOTE_ORIGIN_URL.match(/^(https|git)(:\/\/|@)([^/:]+)[/:]([^/:]+)\/(.+).git$/);
       
