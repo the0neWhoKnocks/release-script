@@ -406,13 +406,15 @@ class CLISelect {
     // Add changes to top of logs
     const originalLog = readFileSync(CHANGELOG_PATH, 'utf8');
     if (newChanges) {
+      const newLog = `\n## ${VERSION_STR}\n\n${newChanges}\n\n---\n`;
       const changelog = originalLog.replace(
         new RegExp(`(${DEFAULT_CHANGELOG_CONTENT})`),
-        `$1\n## ${VERSION_STR}\n\n${newChanges}\n\n---`
+        `$1${newLog}`
       );
       
       if (args.dryRun) {
-        dryRunCmd(`writeFileSync(\n  '${CHANGELOG_PATH}',\n${changelog}\n)`);
+        const trimmedLog = changelog.slice(0, `${DEFAULT_CHANGELOG_CONTENT}${newLog}`.length);
+        dryRunCmd(`writeFileSync(\n  '${CHANGELOG_PATH}',\n${trimmedLog}\n[...rest of file]\n\n)`);
       }
       else {
         writeFileSync(CHANGELOG_PATH, changelog);
