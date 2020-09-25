@@ -51,4 +51,9 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-sc
 
 # If you had a custom install directory
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --update --install-dir \"some/other/folder\""
+
+# or
+npm run release:update
+# or
+yarn release:update
 ```
