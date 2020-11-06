@@ -135,7 +135,7 @@ const parseArgs = ({ desc, flags }) => {
       const descWords = desc.split(/\s/);
       let lineNdx = 0;
       
-      descWords.forEach((word, ndx) => {
+      descWords.forEach((word) => {
         let line = lines[lineNdx];
         if (((line + word).length + MIN_DOTS + LEADING_SPACE.length) > TERMINAL_WIDTH) {
           lineNdx++;
