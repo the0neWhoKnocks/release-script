@@ -55,6 +55,7 @@ install() {
   FIRST_MSG_PREFIX="Installing"
   UPDATING=false
   FORCE_INSTALL=false
+  CREDS_FILE=".creds-docker"
   
   # Parse arguments
   while [ $# -gt 0 ]; do
@@ -106,7 +107,7 @@ install() {
       cd "${ABS_INSTALL_DIR}" \
       && umask g-w,o-w \
       && echo "   1. Downloading files..." \
-      && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/.creds-docker" \
+      && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/${CREDS_FILE}" \
       && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release-config.js" \
       && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release.js"
     )
@@ -129,6 +130,15 @@ install() {
     
     writeFileSync(resolve(__dirname, 'package.json'), JSON.stringify(package, null, 2));
   "
+  
+  if ! ${UPDATING}; then
+    echo "   3. Adding ${BLUE}.gitignore${RESET} rule"
+    
+    if [ ! -f ".gitignore" ]; then
+      touch ".gitignore"
+    fi
+    echo "${CREDS_FILE}" >> ".gitignore"
+  fi
   
   echo;
   echo " ${GREEN}All done${RESET}"
