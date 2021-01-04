@@ -353,10 +353,22 @@ class CLISelect {
   const HAS_TEST_SCRIPT = PACKAGE_JSON.scripts && PACKAGE_JSON.scripts.test;
   if (HAS_TEST_SCRIPT) {
     renderHeader('RUN', 'tests');
-    const testCmd = `cd ${PATH__REPO_ROOT} && npm test`;
-    (args.dryRun)
-      ? dryRunCmd(testCmd)
-      : await cmd(testCmd, { silent: false });
+    
+    const runTests = await new CLISelect({
+      label: color.yellow.bold('Run tests, or skip?'),
+      options: [
+        [color.green.bold('Yes, run tests'), true],
+        [color.red.bold('Nah, skip tests'), false],
+      ],
+      selectedMsg: null,
+    });
+    
+    if (runTests) {
+      const testCmd = `cd ${PATH__REPO_ROOT} && npm test`;
+      (args.dryRun)
+        ? dryRunCmd(testCmd)
+        : await cmd(testCmd, { silent: false });
+    }
   }
   
   if (latestTagOrSHA) {
