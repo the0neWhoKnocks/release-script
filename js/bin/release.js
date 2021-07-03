@@ -588,6 +588,7 @@ class CLISelect {
           onError: rollbackRelease,
           silent: false,
         });
+        rollbacks.push({ label: 'Pushed Git tag', cmd: `git push --delete origin "${VERSION_STR}"` });
       }
       
       renderHeader('PUSH', 'Docker tags');
