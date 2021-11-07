@@ -593,7 +593,7 @@ class CLISelect {
       
       renderHeader('PUSH', 'Docker tags');
       const DOCKER_PUSH_CMD =
-          `docker login -u="${DOCKER_USER}" -p="${DOCKER_PASS}"`
+          `echo "${DOCKER_PASS}" | docker login -u="${DOCKER_USER}" --password-stdin`
         +` && docker push "${DOCKER_TAG}"`
         +` && docker push "${DOCKER__IMG_NAME}:latest"`;
       if (args.dryRun) dryRunCmd(DOCKER_PUSH_CMD);
