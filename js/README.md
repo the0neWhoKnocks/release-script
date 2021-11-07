@@ -9,15 +9,16 @@ and your git config.
 - You have `curl` installed. Otherwise the install/update scripts can't download
 the release script files. 
 - If you want to push releases to GitHub, you'll need to set up a [Personal access token](https://github.com/settings/tokens)
-   - Click `Generate new token`
-   - Add a name (Note) for the token
-   - Check the `repo` checkmark. Top-level access isn't required for Public repos,
+  - Click `Generate new token`
+    - Regardless of what GitHub recommends, I set my token to never expire.
+  - Add a name (Note) for the token
+  - Check the `repo` checkmark. Top-level access isn't required for Public repos,
    but there may come a time that you want to release to a Private repo and you'll
    get blocked if you don't have a token with elevated privileges.
-   - Copy the new token and run
-   ```sh
-   git config --global github.token <YOUR_TOKEN>
-   ```
+  - Copy the new token and run
+    ```sh
+    git config --global github.token <YOUR_TOKEN>
+    ```
 
 Run the below command
 ```sh
