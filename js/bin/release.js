@@ -402,11 +402,19 @@ class CLISelect {
             const { groups: { type } } = m;
             
             switch (type) {
-              case 'fix': categories['Bugfixes'].push(commit.replace(m[0], TITLE_PREFIX));
-              case 'ops': categories['Dev-Ops'].push(commit.replace(m[0], TITLE_PREFIX));
-              case 'feat': categories['Features'].push(commit.replace(m[0], TITLE_PREFIX));
+              case 'fix':
+                categories['Bugfixes'].push(commit.replace(m[0], TITLE_PREFIX));
+                break;
+              case 'ops':
+                categories['Dev-Ops'].push(commit.replace(m[0], TITLE_PREFIX));
+                break;
+              case 'feat':
+                categories['Features'].push(commit.replace(m[0], TITLE_PREFIX));
+                break;
               case 'chore':
-              case 'task': categories['Misc. Tasks'].push(commit.replace(m[0], TITLE_PREFIX));
+              case 'task':
+                categories['Misc. Tasks'].push(commit.replace(m[0], TITLE_PREFIX));
+                break;
             }
           }
           else {
