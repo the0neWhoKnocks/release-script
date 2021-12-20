@@ -12,7 +12,7 @@ module.exports = {
   // Name of the Docker image: <DOCKER_USER>/<NAME>
   DOCKER__IMG_NAME: 'hello-world',
   // An absolute path to a file containing a DockerHub username & password
-  PATH__CREDS__DOCKER: resolve(__dirname, '.creds-docker'),
+  PATH__CREDS__DOCKER: process.env.PATH__CREDS__DOCKER || resolve(__dirname, '.creds-docker'),
   // An absolute path to the root of your repo
-  PATH__REPO_ROOT: resolve(__dirname, '../'),
+  PATH__REPO_ROOT: process.env.PATH__REPO_ROOT || resolve(__dirname, '../'),
 };
