@@ -99,7 +99,7 @@ const parseArgs = ({ desc, flags }) => {
     desc: 'Prints out script options and usage.',
   });
   
-  while(rawArgs.length) {
+  while (rawArgs.length) {
     const currArg = rawArgs[0];
     
     if (/^--?/.test(currArg)) currProp = undefined;
