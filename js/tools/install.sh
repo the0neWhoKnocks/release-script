@@ -142,7 +142,11 @@ install() {
     if [ ! -f ".gitignore" ]; then
       touch ".gitignore"
     fi
-    echo "${CREDS_FILE}" >> ".gitignore"
+    
+    # if doing a force install, don't re-add line
+    if ! grep -q "${CREDS_FILE}" ".gitignore"; then
+      echo "${CREDS_FILE}" >> ".gitignore"
+    fi
   fi
   
   echo;
