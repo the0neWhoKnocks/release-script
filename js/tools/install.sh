@@ -124,13 +124,16 @@ install() {
   node -e "
     const { writeFileSync } = require('fs');
     const { resolve } = require('path');
-    const package = require('./package.json');
+    let package = require('./package.json');
     
     package.scripts.release = './${INSTALL_DIR}/release.js';
     package.scripts['release:dryrun'] = './${INSTALL_DIR}/release.js -dr';
     package.scripts['release:update'] = 'sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --update --install-dir \\\\\"${INSTALL_DIR}\\\\\"\"';
     
-    writeFileSync(resolve(__dirname, 'package.json'), JSON.stringify(package, null, 2));
+    // Place 'version' at the top of the file
+    if (!package.version) package = { version: '0.0.0', ...package };
+    
+    writeFileSync(resolve(__dirname, 'package.json'), \`\${JSON.stringify(package, null, 2)}\\n\`);
   "
   
   if ! ${UPDATING}; then
