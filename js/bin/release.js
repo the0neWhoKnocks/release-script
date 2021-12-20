@@ -573,6 +573,14 @@ class CLISelect {
         DOCKER_PASS = '******';
       }
       
+      if (
+        DOCKER_USER === '<dockerUsername>'
+        || DOCKER_PASS === '<dockerPassword>'
+      ) {
+        await rollbackRelease();
+        throw Error(`Default Docker credentials detected, you need to update '.creds-docker'`);
+      }
+      
       DOCKER_TAG = `${DOCKER__IMG_NAME}:${VERSION_STR}`;
       
       renderHeader('DOCKER_TAG', 'the release');
@@ -619,6 +627,7 @@ class CLISelect {
       else {
         await cmd(DOCKER_PUSH_CMD, {
           cwd: PATH__REPO_ROOT,
+          onError: rollbackRelease,
           silent: false,
         });
       }
@@ -663,7 +672,10 @@ class CLISelect {
             );
             dryRunCmd(CURL_CMD);
           }
-          else await cmd(CURL_CMD, { silent: false });
+          else await cmd(CURL_CMD, {
+            onError: rollbackRelease,
+            silent: false,
+          });
         }
         else {
           console.log(`\n ${color.black.bgYellow(' WARN ')} ${color.yellow("Couldn't parse the origin URL for GH release creation")}`);
