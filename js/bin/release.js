@@ -393,14 +393,25 @@ class CLISelect {
     
     try {
       const TITLE_PREFIX = ': ';
+      const COMMIT_TITLE_REGEX = / (?<type>chore|feat|fix|ops|task):(?:[\w\d-_]+)?( -)? /i;
       commits.split('\n')
         .map(commit => commit.replace(/^([a-z0-9]+)\s/i, `- [$1](${REPO_URL}/commit/$1) `))
         .forEach(commit => {
-          if (commit.includes(' fix: ')) categories['Bugfixes'].push(commit.replace(' fix:', TITLE_PREFIX));
-          else if (commit.includes(' ops: ')) categories['Dev-Ops'].push(commit.replace(' ops:', TITLE_PREFIX));
-          else if (commit.includes(' feat: ')) categories['Features'].push(commit.replace(' feat:', TITLE_PREFIX));
-          else if (commit.includes(' chore: ')) categories['Misc. Tasks'].push(commit.replace(' chore:', TITLE_PREFIX));
-          else categories['Uncategorized'].push(commit);
+          if (COMMIT_TITLE_REGEX.test(commit)) {
+            const m = commit.match(COMMIT_TITLE_REGEX) || { groups: {} };
+            const { groups: { type } } = m;
+            
+            switch (type) {
+              case 'fix': categories['Bugfixes'].push(commit.replace(m[0], TITLE_PREFIX));
+              case 'ops': categories['Dev-Ops'].push(commit.replace(m[0], TITLE_PREFIX));
+              case 'feat': categories['Features'].push(commit.replace(m[0], TITLE_PREFIX));
+              case 'chore':
+              case 'task': categories['Misc. Tasks'].push(commit.replace(m[0], TITLE_PREFIX));
+            }
+          }
+          else {
+            categories['Uncategorized'].push(commit);
+          }
         });
       
       newChanges = Object.keys(categories)
@@ -413,7 +424,7 @@ class CLISelect {
         .filter(category => !!category)
         .join('\n\n');
     }
-    catch (err) { handleError(1, "Couldn't parse commit messages"); }
+    catch (err) { handleError(1, `Couldn't parse commit messages:\n${err}`); }
     
     // Add changes to top of logs
     const originalLog = readFileSync(CHANGELOG_PATH, 'utf8');
