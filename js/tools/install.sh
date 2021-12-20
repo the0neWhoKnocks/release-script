@@ -99,7 +99,8 @@ install() {
     (
       cd "${ABS_INSTALL_DIR}" \
       && echo "   1. Updating files..." \
-      && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release.js"
+      && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release.js" \
+      && chmod +x "release.js"
     )
   else
     # Download files
@@ -109,7 +110,8 @@ install() {
       && echo "   1. Downloading files..." \
       && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/${CREDS_FILE}" \
       && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release-config.js" \
-      && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release.js"
+      && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release.js" \
+      && chmod +x "release.js"
     )
   fi
   
