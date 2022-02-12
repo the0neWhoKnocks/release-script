@@ -564,7 +564,15 @@ class CLISelect {
     
     let DOCKER_USER, DOCKER_PASS, DOCKER_TAG;
     if (PATH__CREDS__DOCKER) {
-      [DOCKER_USER, DOCKER_PASS] = readFileSync(PATH__CREDS__DOCKER, 'utf8').split('\n');
+      try {
+        [DOCKER_USER, DOCKER_PASS] = readFileSync(PATH__CREDS__DOCKER, 'utf8').split('\n');
+      }
+      catch (err) {
+        await rollbackRelease();
+        console.log('');
+        throw err;
+      }
+      
       const LATEST_REGEX = new RegExp(`^${DOCKER__IMG_NAME}.*latest`);
       const LATEST_ID = (await cmd('docker images')).split('\n').filter(line => LATEST_REGEX.test(line)).map(line => line.split(/\s+/)[2])[0];
       
