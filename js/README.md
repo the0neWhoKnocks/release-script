@@ -4,21 +4,24 @@
 ## Install
 
 **Prerequisites**:
-- Your repo is already set up. The script keys off of info in your `package.json`
-and your git config.
-- You have `curl` installed. Otherwise the install/update scripts can't download
-the release script files. 
-- If you want to push releases to GitHub, you'll need to set up a [Personal access token](https://github.com/settings/tokens)
-  - Click `Generate new token`
-    - Regardless of what GitHub recommends, I set my token to never expire.
-  - Add a name (Note) for the token
-  - Check the `repo` checkmark. Top-level access isn't required for Public repos,
-   but there may come a time that you want to release to a Private repo and you'll
-   get blocked if you don't have a token with elevated privileges.
-  - Copy the new token and run
-    ```sh
-    git config --global github.token <YOUR_TOKEN>
-    ```
+- Your repo is already set up. The script keys off of info in your `package.json` and your git config.
+- You have `curl` installed. Otherwise the install/update scripts can't download the release script files.
+- If you want to publish releases:
+   - On **GitHub**, you'll need to set up a [Personal Access Token](https://github.com/settings/tokens).
+      - Click `Generate new token`
+         - Regardless of what GitHub recommends, I set my token to never expire.
+      - Add a name (Note) for the token
+      - Check the `repo` checkmark. Top-level access isn't required for Public repos, but there may come a time that you want to release to a Private repo and you'll get blocked if you don't have a token with elevated privileges.
+      - Copy the new token and run
+         ```sh
+         git config --global github.token <YOUR_TOKEN>
+         ```
+   - On **Gitea**, you'll need to set up an Access Token by going to `<DOMAIN>/user/settings/applications`.
+      - In the **Manage Access Tokens** section, enter a name for your token and click `Generate Token`.
+      - Copy the new token and run
+         ```sh
+         git config --global gitea.token <YOUR_TOKEN>
+         ```
 
 Run the below command
 ```sh
