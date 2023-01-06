@@ -15,4 +15,8 @@ module.exports = {
   PATH__CREDS__DOCKER: process.env.PATH__CREDS__DOCKER || resolve(__dirname, '.creds-docker'),
   // An absolute path to the root of your repo
   PATH__REPO_ROOT: process.env.PATH__REPO_ROOT || resolve(__dirname, '../'),
+  // Optional when using `github`, otherwise required. Something like `https://<HOSTNAME>/api/v1`
+  REPO__API_URL: '',
+  // Where your repo is hosted. (github, gitea)
+  REPO__HOST: '',
 };

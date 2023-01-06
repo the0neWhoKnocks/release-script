@@ -269,6 +269,8 @@ class CLISelect {
     DOCKER__IMG_NAME,
     PATH__CREDS__DOCKER,
     PATH__REPO_ROOT,
+    REPO__API_URL,
+    REPO__HOST,
   } = require('./release-config.js');
   const PACKAGE_JSON = require(`${PATH__REPO_ROOT}/package.json`);
   const args = parseArgs({
@@ -287,6 +289,20 @@ class CLISelect {
     ],
   });
   let newChanges;
+  
+  const REPO_HOSTS = {
+    GITEA: 'gitea',
+    GITHUB: 'github',
+  };
+  const acceptableRepoHosts = Object.values(REPO_HOSTS);
+  if (!REPO__HOST || !acceptableRepoHosts.includes(REPO__HOST)) {
+    const msg = [
+      'Your config does not have an acceptable value for "REPO__HOST"',
+      `Acceptable values are: ${acceptableRepoHosts.join(', ')}`,
+      'You may also want to fill out "REPO__API_URL"',
+    ];
+    handleError(1, msg.join('\n'));
+  }
   
   let rollbacks = [];
   async function rollbackRelease() {
@@ -640,14 +656,19 @@ class CLISelect {
         });
       }
       
-      let GITHUB_TOKEN = await cmd('git config --global github.token');
-      if (GITHUB_TOKEN) {
-        if (args.dryRun && !args.showCreds) GITHUB_TOKEN = '******';
+      let repoToken = await cmd(`git config --global ${REPO__HOST}.token`);
+      if (repoToken) {
+        if (args.dryRun && !args.showCreds) repoToken = '******';
         
         const REMOTE_ORIGIN_URL = await cmd('git config --get remote.origin.url');
-        const urlMatches = REMOTE_ORIGIN_URL.match(/^(https|git)(:\/\/|@)([^/:]+)[/:]([^/:]+)\/(.+).git$/);
+        // The lookup is based on the assumption that the URLs end with `<USER>/<REPO>.git`.
+        // Tested against:
+        // - https://<HOSTNAME>/<USER>/<REPO>.git
+        // - ssh://git@<HOSTNAME>:<PORT>/<USER>/<REPO>.git
+        // - git@<HOSTNAME>:<USER>/<REPO>.git
+        const urlMatches = REMOTE_ORIGIN_URL.match(/.*(\/|:)(?<user>[^/:]+)\/(?<repoName>.+?(?=\.git))\.git$/);
         
-        renderHeader('CREATE', 'GitHub release');
+        renderHeader('CREATE', `${REPO__HOST} release`);
         
         if (urlMatches) {
           const BRANCH = await cmd('git rev-parse --abbrev-ref HEAD');
@@ -659,24 +680,28 @@ class CLISelect {
             tag_name: VERSION_STR,
             target_commitish: BRANCH,
           });
-          const GH_USER = urlMatches[4];
-          const GH_REPO = urlMatches[5];
-          const GH_API__RELEASE_URL = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/releases`;
+          const {
+            repoName: REPO_NAME,
+            user: REPO_USER,
+          } = urlMatches.groups;
+          const REPO_API_URL = (REPO__API_URL) ? REPO__API_URL : 'https://api.github.com';
+          const REPO_API__RELEASES_URL = `${REPO_API_URL}/repos/${REPO_USER}/${REPO_NAME}/releases`;
+          
           // https://developer.github.com/v3/repos/releases/#create-a-release
           const CURL_CMD = [
             'curl',
             '-H "Content-Type: application/json"',
-            `-H "Authorization: token ${GITHUB_TOKEN}"`,
+            `-H "Authorization: token ${repoToken}"`,
             '-X POST',
             `-d '${JSON_PAYLOAD.replace(/'/g, '\\u0027')}'`,
             '--silent --output /dev/null --show-error --fail',
-            GH_API__RELEASE_URL,
+            REPO_API__RELEASES_URL,
           ].join(' ');
           
           if (args.dryRun) {
             console.log(
                  `  ${color.green('Payload')}: ${JSON.stringify(JSON.parse(JSON_PAYLOAD), null, 2)}`
-              +`\n  ${color.green('URL')}: ${color.blue.bold.underline(GH_API__RELEASE_URL)}`
+              +`\n  ${color.green('URL')}: ${color.blue.bold.underline(REPO_API__RELEASES_URL)}`
             );
             dryRunCmd(CURL_CMD);
           }
