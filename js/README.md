@@ -1,10 +1,10 @@
 # For Node Projects
 ---
 
-## Install
+## Pre-Install
 
 **Prerequisites**:
-- Your repo is already set up. The script keys off of info in your `package.json` and your git config.
+- Your repo is already set up. The script keys off of info in your `package.json` and your `git` config.
 - You have `curl` installed. Otherwise the install/update scripts can't download the release script files.
 - If you want to publish releases:
    - On **GitHub**, you'll need to set up a [Personal Access Token](https://github.com/settings/tokens).
@@ -23,15 +23,34 @@
          git config --global gitea.token <YOUR_TOKEN>
          ```
 
-Run the below command
+---
+
+## Install
+
+Available flags for the installer:
+| Flag | Description |
+| ---- | ----------- |
+| `--force` | Force a fresh install, regardless of an existing install existing |
+| `--install-dir` | If you want to install somewhere other than `./bin` |
+| `--script-src` | Run the install from local files. Must pass an absolute path like `/<PATH>/js` |
+| `--update` | Pulls in updates for the releaser script |
+
+For a remote install, run:
 ```sh
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh)"
+# go into the repo you want to add releases for
+cd <YOUR_REPO>
 
-# If you don't want to install to the default `./bin` folder
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --install-dir \"some/other/folder\""
+# install
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh)" # [optional flags]
+```
 
-# If you want to force an install
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --force"
+To install from local files, run:
+```sh
+# go into the repo you want to add releases for
+cd <YOUR_REPO>
+
+# install
+$HOME/some/path/js/tools/install.sh --script-src "$HOME/some/path/js"
 ```
 
 ---
