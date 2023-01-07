@@ -452,7 +452,7 @@ class CLISelect {
         .map(category => {
           const categoryItems = categories[category];
           return (categoryItems.length)
-            ? `**${category}**\n${categoryItems.join('\n')}`
+            ? `  **${category}**\n  ${categoryItems.join('\n  ')}`
             : null;
         })
         .filter(category => !!category)
@@ -463,7 +463,7 @@ class CLISelect {
     // Add changes to top of logs
     const originalLog = readFileSync(CHANGELOG_PATH, 'utf8');
     if (newChanges) {
-      const newLog = `\n## ${VERSION_STR}\n\n${newChanges}\n\n---\n`;
+      const newLog = `\n## ${VERSION_STR}\n\n<details>\n  <summary>Expand for ${VERSION_STR} Details</summary>\n\n${newChanges}\n</details>\n\n---\n`;
       const changelog = originalLog.replace(
         new RegExp(`(${DEFAULT_CHANGELOG_CONTENT})`),
         `$1${newLog}`
@@ -576,7 +576,7 @@ class CLISelect {
     const escapedNewChanges = newChanges
       .replace(/"/g, '\\"')
       .replace(/`/g, '\\`');
-    const GIT_CHANGELOG_MSG = `## ${VERSION_STR}\n\n${escapedNewChanges}`;
+    const GIT_CHANGELOG_MSG = `## ${VERSION_STR}\n\n<details>\n  <summary>Expand for ${VERSION_STR} Details</summary>\n\n${escapedNewChanges}\n</details>`;
     const GIT_TAG_CMD = `git tag -a "${VERSION_STR}" -m "${GIT_CHANGELOG_MSG}"`;
     if (args.dryRun) dryRunCmd(GIT_TAG_CMD);
     else {
