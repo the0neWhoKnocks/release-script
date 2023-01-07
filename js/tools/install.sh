@@ -1,9 +1,6 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
-
-# Default settings
-INSTALL_DIR=${INSTALL_DIR:-"bin"}
 
 # Only use colors if connected to a terminal
 if [ -t 1 ]; then
@@ -52,10 +49,12 @@ exitIfFound() {
 }
 
 install() {
-  FIRST_MSG_PREFIX="Installing"
-  UPDATING=false
-  FORCE_INSTALL=false
   CREDS_FILE=".creds-docker"
+  FIRST_MSG_PREFIX="Installing"
+  FORCE_INSTALL=false
+  INSTALL_DIR="bin"
+  SCRIPT_SRC="https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js"
+  UPDATING=false
   
   # Parse arguments
   while [ $# -gt 0 ]; do
@@ -66,6 +65,14 @@ install() {
       --install-dir)
         INSTALL_DIR=$2
         shift
+        ;;
+      --script-src)
+        SCRIPT_SRC=$2
+        shift
+        if [[ "${SCRIPT_SRC}" != "http"* ]]; then
+          # local file, so prefix for `curl`
+          SCRIPT_SRC="file://${SCRIPT_SRC}"
+        fi
         ;;
       --update)
         UPDATING=true
@@ -99,7 +106,7 @@ install() {
     (
       cd "${ABS_INSTALL_DIR}" \
       && echo "   1. Updating files..." \
-      && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release.js" \
+      && curl -s -O "${SCRIPT_SRC}/bin/release.js" \
       && chmod +x "release.js"
     )
   else
@@ -108,9 +115,9 @@ install() {
       cd "${ABS_INSTALL_DIR}" \
       && umask g-w,o-w \
       && echo "   1. Downloading files..." \
-      && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/${CREDS_FILE}" \
-      && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release-config.js" \
-      && curl -s -O "https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/bin/release.js" \
+      && curl -s -O "${SCRIPT_SRC}/bin/${CREDS_FILE}" \
+      && curl -s -O "${SCRIPT_SRC}/bin/release-config.js" \
+      && curl -s -O "${SCRIPT_SRC}/bin/release.js" \
       && chmod +x "release.js"
     )
   fi
@@ -128,7 +135,7 @@ install() {
     
     package.scripts.release = './${INSTALL_DIR}/release.js';
     package.scripts['release:dryrun'] = './${INSTALL_DIR}/release.js -dr';
-    package.scripts['release:update'] = 'sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh) --update --install-dir \\\\\"${INSTALL_DIR}\\\\\"\"';
+    package.scripts['release:update'] = 'sh -c \"\$(curl -fsSL ${SCRIPT_SRC}/tools/install.sh) --update --install-dir \\\\\"${INSTALL_DIR}\\\\\"\"';
     
     // Place 'version' at the top of the file
     if (!package.version) package = { version: '0.0.0', ...package };
