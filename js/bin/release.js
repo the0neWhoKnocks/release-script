@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { existsSync, readFileSync, writeFileSync } = require('fs');
+const { access, lstat, readFile, readlink, writeFile } = require('fs/promises');
 
 // Boilerplate =================================================================
 
@@ -260,6 +260,16 @@ class CLISelect {
 
 // Script specific =============================================================
 
+const fileExists = async (path) => {
+  try { await access(path); return true; }
+  catch { return false; }
+};
+
+const isSymbolic = async (path) => {
+  const stats = await lstat(path);
+  return stats.isSymbolicLink();
+};
+
 (async function release() {
   const {
     APP__TEST_URL,
@@ -312,7 +322,7 @@ class CLISelect {
       for (let i=rollbacks.length - 1; i>=0; i--) {
         const { cmd: _cmd, content, file, label } = rollbacks[i];
         if (_cmd) await cmd(_cmd, { cwd: PATH__REPO_ROOT });
-        else if (file) writeFileSync(file, content);
+        else if (file) await writeFile(file, content);
         
         console.log(` - Reverted: ${color.blue.bold(label)}`);
       }
@@ -403,8 +413,8 @@ class CLISelect {
     const CHANGELOG_PATH = `${PATH__REPO_ROOT}/CHANGELOG.md`;
     const DEFAULT_CHANGELOG_CONTENT = '# Changelog\n---\n';
     
-    if (!existsSync(CHANGELOG_PATH)) {
-      writeFileSync(CHANGELOG_PATH, DEFAULT_CHANGELOG_CONTENT);
+    if ( !(await fileExists(CHANGELOG_PATH)) ) {
+      await writeFile(CHANGELOG_PATH, DEFAULT_CHANGELOG_CONTENT);
     }
 
     // const commits = await cmd('git log "v3.1.0".."v4.0.0" --oneline');
@@ -461,7 +471,7 @@ class CLISelect {
     catch (err) { handleError(1, `Couldn't parse commit messages:\n${err}`); }
     
     // Add changes to top of logs
-    const originalLog = readFileSync(CHANGELOG_PATH, 'utf8');
+    const originalLog = await readFile(CHANGELOG_PATH, 'utf8');
     if (newChanges) {
       const newLog = `\n## ${VERSION_STR}\n\n<details>\n  <summary>Expand for ${VERSION_STR} Details</summary>\n\n${newChanges}\n</details>\n\n---\n`;
       const changelog = originalLog.replace(
@@ -471,10 +481,10 @@ class CLISelect {
       
       if (args.dryRun) {
         const trimmedLog = changelog.slice(0, `${DEFAULT_CHANGELOG_CONTENT}${newLog}`.length);
-        dryRunCmd(`writeFileSync(\n  '${CHANGELOG_PATH}',\n${trimmedLog}\n[...rest of file]\n\n)`);
+        dryRunCmd(`writeFile(\n  '${CHANGELOG_PATH}',\n${trimmedLog}\n[...rest of file]\n\n)`);
       }
       else {
-        writeFileSync(CHANGELOG_PATH, changelog);
+        await writeFile(CHANGELOG_PATH, changelog);
         rollbacks.push({ label: 'CHANGELOG', file: CHANGELOG_PATH, content: originalLog });
       }
     }
@@ -591,7 +601,10 @@ class CLISelect {
     let DOCKER_USER, DOCKER_PASS, DOCKER_TAG;
     if (PATH__CREDS__DOCKER) {
       try {
-        [DOCKER_USER, DOCKER_PASS] = readFileSync(PATH__CREDS__DOCKER, 'utf8').split('\n');
+        const credsPath = ( await isSymbolic(PATH__CREDS__DOCKER) )
+          ? await readlink(PATH__CREDS__DOCKER)
+          : PATH__CREDS__DOCKER;
+        [ DOCKER_USER, DOCKER_PASS ] = (await readFile(credsPath, 'utf8')).split('\n');
       }
       catch (err) {
         await rollbackRelease();
