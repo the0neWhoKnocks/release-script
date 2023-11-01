@@ -23,7 +23,7 @@ else
 fi
 
 error() {
-  echo "\n ${BLACK}${RED_BG} ERROR ${RESET}${RED} $@${RESET}" >&2
+  echo -e "\n ${BLACK}${RED_BG} ERROR ${RESET}${RED} $@${RESET}" >&2
   exit 1
 }
 
@@ -160,5 +160,11 @@ install() {
   echo " ${GREEN}All done${RESET}"
   echo " Run ${BLUE}npm run release:dryrun${RESET} to test it out"
 }
+
+if [ ! -d "./.git" ]; then
+  error "Install aborted: No repo detected"
+elif [ ! -f "./package.json" ]; then
+  error "Install aborted: NodeJS project not initialized"
+fi
 
 install "$@"
