@@ -679,7 +679,12 @@ const isSymbolic = async (path) => {
         });
       }
       
-      let repoToken = await cmd(`git config --global ${REPO__HOST}.token`);
+      let repoToken = await cmd(`git config --global ${REPO__HOST}.token`, {
+        cwd: PATH__REPO_ROOT,
+        onError: rollbackRelease,
+        silent: false,
+      });
+      
       if (repoToken) {
         if (args.dryRun && !args.showCreds) repoToken = '******';
         
