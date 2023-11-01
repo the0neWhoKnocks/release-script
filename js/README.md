@@ -32,26 +32,42 @@ Available flags for the installer:
 | ---- | ----------- |
 | `--force` | Force a fresh install, regardless of an existing install existing |
 | `--install-dir` | If you want to install somewhere other than `./bin` |
-| `--script-src` | Run the install from local files. Must pass an absolute path like `/<PATH>/js` |
+| `--script-src` | Run the install from local files. Must pass an absolute path like `/<PATH>/js`. Usually used during development or if you want updates to only come from local sources. |
 | `--update` | Pulls in updates for the releaser script |
 
-For a remote install, run:
-```sh
-# go into the repo you want to add releases for
-cd <YOUR_REPO>
+- To install from remote source, run:
+    ```sh
+    # go into the repo you want to add releases for
+    cd <YOUR_REPO>
 
-# install
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh)" # [optional flags]
-```
+    # install
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh)" # [optional flags]
+    ```
+- To install from local source, run:
+    ```sh
+    # go into the repo you want to add releases for
+    cd <YOUR_REPO>
 
-To install from local files, run:
-```sh
-# go into the repo you want to add releases for
-cd <YOUR_REPO>
+    # install (updates will come from remote repo)
+    $HOME/some/path/js/tools/install.sh
+    # or
+    # install (updates will come from local files only)
+    $HOME/some/path/js/tools/install.sh --script-src "$HOME/some/path/js"
+    ```
+- To install via a reusable shell command, add this to your `.*rc` file:
+    ```sh
+    # example inside .zshrc
 
-# install
-$HOME/some/path/js/tools/install.sh --script-src "$HOME/some/path/js"
-```
+    function installReleaser {
+      # Uncomment your preferred usage
+      
+      # [local source]
+      # $HOME/some/path/js/tools/install.sh $@
+      
+      # [remote source]
+      # sh -c "$(curl -fsSL https://raw.githubusercontent.com/the0neWhoKnocks/release-script/master/js/tools/install.sh)" $@
+    }
+    ```
 
 ---
 
