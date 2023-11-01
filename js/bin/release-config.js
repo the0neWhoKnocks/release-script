@@ -1,4 +1,4 @@
-const { resolve } = require('path');
+const { resolve } = require('node:path');
 
 module.exports = {
   // URL that the App will be available at once started.
