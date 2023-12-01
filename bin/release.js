@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { access, lstat, readFile, readlink, writeFile } = require('node:fs/promises');
+const { access, lstat, readFile, writeFile } = require('node:fs/promises');
 
 // Boilerplate =================================================================
 
@@ -259,60 +259,256 @@ class CLISelect {
 }
 
 // Script specific =============================================================
+const PATH__REPO_ROOT = process.env.PWD;
+const PATH__REPO_CONFIG = `${PATH__REPO_ROOT}/release-config.js`;
+const PATH__SCRIPT = __dirname;
+const SYMBOL__CHECK = '\u2714';
+const SYMBOL__INFO = '\u2139';
+const SYMBOL__X = '\u2716';
+const {
+  _defaultDockerRegistry,
+  _defaultRepoAPIURL,
+  _supportedRepos,
+  ...schema
+} = require(`${PATH__SCRIPT}/schema.json`);
+const args = parseArgs({
+  desc: 'A script to help you release/publish code.',
+  flags: [
+    {
+      prop: 'dryRun',
+      flag: ['--dry-run', '-dr'],
+      desc: "Prints out everything that'll happen. Won't actually deploy any code.",
+    },
+    {
+      prop: 'genConfig',
+      flag: ['--generate-config', '-gc'],
+      desc: "Generates a release config in the repo.",
+    },
+    {
+      prop: 'showCreds',
+      flag: ['--show-credentials', '-sc'],
+      desc: "Prints credentials, despite being run with --dry-run.",
+    },
+    {
+      prop: 'updateConfig',
+      flag: ['--update-config', '-uc'],
+      desc: "Update an old config.",
+    },
+  ],
+});
 
 const fileExists = async (path) => {
   try { await access(path); return true; }
   catch { return false; }
 };
 
-const isSymbolic = async (path) => {
-  const stats = await lstat(path);
-  return stats.isSymbolicLink();
+const genConfig = async ({
+  top = 'module.exports = {',
+  bottom = '};\n',
+  updating,
+} = {}) => {
+  let config = Object.entries(schema).reduce((arr, [ key, keyData ]) => {
+    const { desc } = keyData; 
+    const { value } = (updating) ? updating[key] || keyData : keyData; 
+    
+    if (desc) {
+      let line = `// ${desc}`;
+      if (key === 'REPO__HOST') line += ` (Supported: ${_supportedRepos.join(', ')})`;
+      else if (key === 'DOCKER__REGISTRY_DOMAIN') line = line.replace('$DEFAULT_REGISTRY', _defaultDockerRegistry);
+      arr.push(line);
+    }
+    
+    const wrapVal = (typeof value === 'string' && !/^['"`]/.test(value));
+    arr.push(`${key}: ${(wrapVal) ? `'${value}'` : value},`);
+    
+    return arr;
+  }, []);
+  config = [
+    top,
+    ...config.map((line) => `  ${line}`),
+    bottom,
+  ];
+  
+  if (args.dryRun) {
+    console.log(`\n${config.join('\n')}`);
+  }
+  else {
+    await writeFile(PATH__REPO_CONFIG, config.join('\n'), 'utf8');
+  }
 };
 
 (async function release() {
-  const {
+  // Verify the config exists ==================================================
+  if (args.genConfig) {
+    await genConfig();
+    console.log(`\n ${color.green(SYMBOL__CHECK)} Config generated.\n ${color.yellow(SYMBOL__INFO)} Update the config with your repo-specific values, and re-run: ${color.cyan('release')}`);
+    process.exit(0);
+  }
+  else if (!(await fileExists(PATH__REPO_CONFIG))) {
+    handleError(1, `No config detected for repo path "${PATH__REPO_ROOT}".\n\n Run: ${color.cyan('release --generate-config')}`);
+  }
+  
+  // Update config =============================================================
+  if (args.updateConfig) {
+    const oldConfig = await readFile(PATH__REPO_CONFIG, 'utf8');
+    const parts = oldConfig.split('\n').reduce((obj, line) => {
+      const { top, middle, bottom } = obj;
+      
+      if (!obj.section) {
+        top.push(line);
+        if (/^module\.exports/.test(line)) { obj.section = 'middle'; }
+      }
+      else if (obj.section === 'middle') {
+        if (/^};/.test(line)) {
+          obj.section = 'bottom';
+          bottom.push(line);
+        }
+        else { middle.push(line); }
+      }
+      else {
+        bottom.push(line);
+      }
+      
+      return obj;
+    }, { top: [], middle: [], bottom: [] });
+    const parsed = parts.middle.reduce((obj, line, ndx) => {
+      line = line.trim().replace(/,$/, '');
+      
+      if (line.startsWith('// ')) obj.comments[ndx] = line;
+      else {
+        const [ key, ...val ] = line.split(': ');
+        obj[key] = { desc: obj.comments[ndx - 1], value: val.join(': ') };
+      }
+      
+      return obj;
+    }, { comments: [] });
+    
+    await genConfig({
+      top: parts.top.join('\n'),
+      bottom: parts.bottom.join('\n'),
+      updating: parsed,
+    });
+    
+    console.log(`\n ${color.green(SYMBOL__CHECK)} Config updated.\n ${color.yellow(SYMBOL__INFO)} Review the config to ensure entegrity, then re-run: ${color.cyan('release')}`);
+    process.exit(0);
+  }
+  
+  // Begin sanity checks =======================================================
+  console.log('\n Sanity checks:');
+  
+  // Verify the config's schema ================================================
+  const config = require(PATH__REPO_CONFIG);
+  let {
+    version: configVersion,
     APP__TEST_URL,
     CMD__DOCKER_BUILD,
     CMD__DOCKER_START,
     CMD__COMPILE_ASSETS,
     DOCKER__IMG_NAME,
-    PATH__CREDS__DOCKER,
-    PATH__REPO_ROOT,
+    DOCKER__REGISTRY_DOMAIN,
     REPO__API_URL,
     REPO__HOST,
-  } = require('./release-config.js');
-  const PACKAGE_JSON = require(`${PATH__REPO_ROOT}/package.json`);
-  const args = parseArgs({
-    desc: 'A zero dependency script to help you release/publish code.',
-    flags: [
-      {
-        prop: 'dryRun',
-        flag: ['--dry-run', '-dr'],
-        desc: "Prints out everything that'll happen. Won't actually deploy any code.",
-      },
-      {
-        prop: 'showCreds',
-        flag: ['--show-credentials', '-sc'],
-        desc: "Prints credentials, despite being run with --dry-run.",
-      },
-    ],
-  });
-  let newChanges;
+  } = config;
   
-  const REPO_HOSTS = {
-    GITEA: 'gitea',
-    GITHUB: 'github',
-  };
-  const acceptableRepoHosts = Object.values(REPO_HOSTS);
-  if (!REPO__HOST || !acceptableRepoHosts.includes(REPO__HOST)) {
+  if (!DOCKER__REGISTRY_DOMAIN) DOCKER__REGISTRY_DOMAIN = _defaultDockerRegistry;
+  if (!REPO__API_URL) REPO__API_URL = _defaultRepoAPIURL;
+  
+  if (!configVersion) {
+    handleError(1, 'No version detected for your config.\n\n Run: release --update-config');
+  }
+  else if (schema.version > configVersion) {
+    handleError(1, `Your config appears to be out of date:\n   Schema version "${schema.version}" | Repo version "${configVersion}"\n\n Run: release --update-config`);
+  }
+  
+  if (!REPO__HOST || !_supportedRepos.includes(REPO__HOST)) {
     const msg = [
-      'Your config does not have an acceptable value for "REPO__HOST"',
-      `Acceptable values are: ${acceptableRepoHosts.join(', ')}`,
-      'You may also want to fill out "REPO__API_URL"',
+      'Your config does not have an acceptable value for `REPO__HOST`',
+      `Supported values are: ${_supportedRepos.join(', ')}`,
     ];
     handleError(1, msg.join('\n'));
   }
+  
+  if (REPO__HOST !== 'github' && !REPO__API_URL) {
+    handleError(1, '`REPO__API_URL` needs to have a value when `REPO__HOST` does not equal `github`');
+  }
+  
+  console.log(` ${color.green(SYMBOL__CHECK)} Config schema valid`);
+  
+  // Verify Docker setup =======================================================
+  try {
+    const dockerConfig = require(`${process.env.HOME}/.docker/config.json`);
+    const registryURL = Object.keys(dockerConfig.auths).find((url) => url.includes(DOCKER__REGISTRY_DOMAIN));
+    const loggedIn = !!registryURL;
+    
+    if (loggedIn) {
+      console.log(` ${color.green(SYMBOL__CHECK)} Docker is logged in`);
+    }
+    else {
+      handleError(1, `You need to run \`docker login ${DOCKER__REGISTRY_DOMAIN} -u <USERNAME>\``);
+    }
+    
+    // If the URL contains a trailing slash, the curl will fail
+    const parsedRegistryURL = registryURL.replace(/\/$/, '');
+    const result = await cmd(`curl --head ${parsedRegistryURL}`);
+    if (result.includes('200 OK')) {
+      console.log(` ${color.green(SYMBOL__CHECK)} Can connect to the Docker registry`);
+    }
+    else {
+      handleError(1, `Could not connect to the Docker registry: ${parsedRegistryURL}\n\n${result}`);
+    }
+  }
+  catch (err) {
+    handleError(1, `Problem verifying your Docker setup:\n${err}`);
+  }
+  
+  // Verify Git setup ==========================================================
+  const REMOTE_ORIGIN_URL = await cmd('git config --get remote.origin.url', {
+    onError: () => {
+      handleError(1, "Your repo is missing an origin URL");
+    },
+  });
+  // The lookup is based on the assumption that the URLs end with `<USER>/<REPO>.git`.
+  // Tested against:
+  // - https://<HOSTNAME>/<USER>/<REPO>.git
+  // - ssh://git@<HOSTNAME>:<PORT>/<USER>/<REPO>.git
+  // - git@<HOSTNAME>:<USER>/<REPO>.git
+  const gitOriginURLParts = REMOTE_ORIGIN_URL.match(/.*(\/|:)(?<repoUser>[^/:]+)\/(?<repoName>.+?(?=\.git))\.git$/);
+  let repoName, repoUser;
+  if (gitOriginURLParts) {
+    ({ repoName, repoUser } = gitOriginURLParts.groups);
+  }
+  else {
+    handleError(1, "Could not parse your repo's origin URL");
+  }
+  
+  let repoToken = await cmd(`git config --global ${REPO__HOST}.token`, {
+    onError: () => {
+      handleError(1, `Looks like you haven't set up your repo's token yet.\n\n Run: ${color.cyan(`git config --global ${REPO__HOST}.token <YOUR_TOKEN>`)}`);
+    },
+  });
+  console.log(` ${color.green(SYMBOL__CHECK)} Repo token set up`);
+  
+  const repoAPIURL = `${REPO__API_URL}/repos/${repoUser}/${repoName}`;
+  await cmd(
+    [
+      'curl',
+      '-H "Content-Type: application/json"',
+      `-H "Authorization: token ${repoToken}"`,
+      '--show-error --fail',
+      repoAPIURL,
+    ].join(' '),
+    {
+      onError: (err) => {
+        handleError(1, `Problem testing repo API connection for ${repoAPIURL}:\n${err}`);
+      },
+    }
+  );
+  console.log(` ${color.green(SYMBOL__CHECK)} Can connect to repo API`);
+  
+  // Start the release process =================================================
+  
+  const PACKAGE_JSON = require(`${PATH__REPO_ROOT}/package.json`);
+  let newChanges;
   
   let rollbacks = [];
   async function rollbackRelease() {
@@ -337,20 +533,6 @@ const isSymbolic = async (path) => {
 
   // Get current version number
   const ORIGINAL_VERSION = PACKAGE_JSON.version;
-  const REMOTE_ORIGIN_URL = await cmd('git config --get remote.origin.url');
-  // The lookup is based on the assumption that the URLs end with `<USER>/<REPO>.git`.
-  // Tested against:
-  // - https://<HOSTNAME>/<USER>/<REPO>.git
-  // - ssh://git@<HOSTNAME>:<PORT>/<USER>/<REPO>.git
-  // - git@<HOSTNAME>:<USER>/<REPO>.git
-  const gitOriginURLParts = REMOTE_ORIGIN_URL.match(/.*(\/|:)(?<repoUser>[^/:]+)\/(?<repoName>.+?(?=\.git))\.git$/);
-  let repoName, repoUser;
-  if (gitOriginURLParts) {
-    ({ repoName, repoUser } = gitOriginURLParts.groups);
-  }
-  else {
-    handleError(1, "Could not parse your repo's origin URL");
-  }
   // Build out what the version would be based on what the user chooses
   const VERSION_NUMS = ORIGINAL_VERSION.split('.');
   const MAJOR = `${+VERSION_NUMS[0] + 1}.0.0`;
@@ -558,6 +740,7 @@ const isSymbolic = async (path) => {
   }
 
   if (continueRelease) {
+    // Finalize versioning for repo files ======================================
     renderHeader('ADD', 'updated files');
     const ADD_CMD = 'git add -f CHANGELOG.md package*.json';
     if (args.dryRun) dryRunCmd(ADD_CMD);
@@ -582,6 +765,7 @@ const isSymbolic = async (path) => {
       rollbacks.push({ label: 'Bump commit', cmd: 'git reset --soft HEAD~1' });
     }
     
+    // Version the latest commit ===============================================
     renderHeader('GIT_TAG', 'the release');
     const escapedNewChanges = newChanges
       .replace(/"/g, '\\"')
@@ -598,51 +782,24 @@ const isSymbolic = async (path) => {
       rollbacks.push({ label: 'Git tag', cmd: `git tag -d "${VERSION_STR}"` });
     }
     
-    let DOCKER_USER, DOCKER_PASS, DOCKER_TAG;
-    if (PATH__CREDS__DOCKER) {
-      try {
-        const credsPath = ( await isSymbolic(PATH__CREDS__DOCKER) )
-          ? await readlink(PATH__CREDS__DOCKER)
-          : PATH__CREDS__DOCKER;
-        [ DOCKER_USER, DOCKER_PASS ] = (await readFile(credsPath, 'utf8')).split('\n');
-      }
-      catch (err) {
-        await rollbackRelease();
-        console.log('');
-        throw err;
-      }
-      
-      const LATEST_REGEX = new RegExp(`^${DOCKER__IMG_NAME}.*latest`);
-      const LATEST_ID = (await cmd('docker images')).split('\n').filter(line => LATEST_REGEX.test(line)).map(line => line.split(/\s+/)[2])[0];
-      
-      if (args.dryRun && !args.showCreds) {
-        DOCKER_USER = '******';
-        DOCKER_PASS = '******';
-      }
-      
-      if (
-        DOCKER_USER === '<dockerUsername>'
-        || DOCKER_PASS === '<dockerPassword>'
-      ) {
-        await rollbackRelease();
-        throw Error(`Default Docker credentials detected, you need to update '.creds-docker'`);
-      }
-      
-      DOCKER_TAG = `${DOCKER__IMG_NAME}:${VERSION_STR}`;
-      
-      renderHeader('DOCKER_TAG', 'the release');
-      const DOCKER_TAG_CMD = `docker tag "${LATEST_ID}" "${DOCKER_TAG}"`;
-      if (args.dryRun) dryRunCmd(DOCKER_TAG_CMD);
-      else {
-        await cmd(DOCKER_TAG_CMD, {
-          cwd: PATH__REPO_ROOT,
-          onError: rollbackRelease,
-          silent: false,
-        });
-        rollbacks.push({ label: 'Docker tag', cmd: `docker rmi "${DOCKER_TAG}"` });
-      }
+    // Version the latest Docker image =========================================
+    const DOCKER_TAG = `${DOCKER__IMG_NAME}:${VERSION_STR}`;
+    const LATEST_REGEX = new RegExp(`^${DOCKER__IMG_NAME}.*latest`);
+    const LATEST_ID = (await cmd('docker images')).split('\n').filter(line => LATEST_REGEX.test(line)).map(line => line.split(/\s+/)[2])[0];
+    
+    renderHeader('DOCKER_TAG', 'the release');
+    const DOCKER_TAG_CMD = `docker tag "${LATEST_ID}" "${DOCKER_TAG}"`;
+    if (args.dryRun) dryRunCmd(DOCKER_TAG_CMD);
+    else {
+      await cmd(DOCKER_TAG_CMD, {
+        cwd: PATH__REPO_ROOT,
+        onError: rollbackRelease,
+        silent: false,
+      });
+      rollbacks.push({ label: 'Docker tag', cmd: `docker rmi "${DOCKER_TAG}"` });
     }
     
+    // Give the User one last chance to back out ===============================
     const finalizeRelease = await new CLISelect({
       label: color.yellow.bold('Finalize release by deploying all data?'),
       options: [
@@ -653,6 +810,7 @@ const isSymbolic = async (path) => {
     });
     
     if (finalizeRelease) {
+      // Push up changelog and versioned tag ===================================
       renderHeader('PUSH', 'Git commit and tag');
       const GIT_PUSH_CMD = 'git push --follow-tags';
       if (args.dryRun) dryRunCmd(GIT_PUSH_CMD);
@@ -665,11 +823,9 @@ const isSymbolic = async (path) => {
         rollbacks.push({ label: 'Pushed Git tag', cmd: `git push --delete origin "${VERSION_STR}"` });
       }
       
+      // Deploy versioned images to Docker registry ============================
       renderHeader('PUSH', 'Docker tags');
-      const DOCKER_PUSH_CMD =
-          `echo "${DOCKER_PASS}" | docker login -u="${DOCKER_USER}" --password-stdin`
-        +` && docker push "${DOCKER_TAG}"`
-        +` && docker push "${DOCKER__IMG_NAME}:latest"`;
+      const DOCKER_PUSH_CMD = `docker push "${DOCKER_TAG}" && docker push "${DOCKER__IMG_NAME}:latest"`;
       if (args.dryRun) dryRunCmd(DOCKER_PUSH_CMD);
       else {
         await cmd(DOCKER_PUSH_CMD, {
@@ -679,55 +835,44 @@ const isSymbolic = async (path) => {
         });
       }
       
-      let repoToken = await cmd(`git config --global ${REPO__HOST}.token`, {
-        cwd: PATH__REPO_ROOT,
+      // Deploy release to upstream repo =======================================
+      if (args.dryRun && !args.showCreds) repoToken = '******';
+      
+      renderHeader('CREATE', `${REPO__HOST} release`);
+      
+      const BRANCH = await cmd('git rev-parse --abbrev-ref HEAD');
+      const JSON_PAYLOAD = JSON.stringify({
+        body: GIT_CHANGELOG_MSG,
+        draft: false,
+        name: VERSION_STR,
+        prerelease: false,
+        tag_name: VERSION_STR,
+        target_commitish: BRANCH,
+      });
+      
+      // https://developer.github.com/v3/repos/releases/#create-a-release
+      const REPO_API__RELEASES_URL = `${REPO__API_URL}/repos/${repoUser}/${repoName}/releases`;
+      const CURL_CMD = [
+        'curl',
+        '-H "Content-Type: application/json"',
+        `-H "Authorization: token ${repoToken}"`,
+        '-X POST',
+        `-d '${JSON_PAYLOAD.replace(/'/g, '\\u0027')}'`,
+        '--silent --output /dev/null --show-error --fail',
+        REPO_API__RELEASES_URL,
+      ].join(' ');
+      
+      if (args.dryRun) {
+        console.log(
+              `  ${color.green('Payload')}: ${JSON.stringify(JSON.parse(JSON_PAYLOAD), null, 2)}`
+          +`\n  ${color.green('URL')}: ${color.blue.bold.underline(REPO_API__RELEASES_URL)}`
+        );
+        dryRunCmd(CURL_CMD);
+      }
+      else await cmd(CURL_CMD, {
         onError: rollbackRelease,
         silent: false,
       });
-      
-      if (repoToken) {
-        if (args.dryRun && !args.showCreds) repoToken = '******';
-        
-        renderHeader('CREATE', `${REPO__HOST} release`);
-        
-        const BRANCH = await cmd('git rev-parse --abbrev-ref HEAD');
-        const JSON_PAYLOAD = JSON.stringify({
-          body: GIT_CHANGELOG_MSG,
-          draft: false,
-          name: VERSION_STR,
-          prerelease: false,
-          tag_name: VERSION_STR,
-          target_commitish: BRANCH,
-        });
-        const REPO_API_URL = (REPO__API_URL) ? REPO__API_URL : 'https://api.github.com';
-        const REPO_API__RELEASES_URL = `${REPO_API_URL}/repos/${repoUser}/${repoName}/releases`;
-        
-        // https://developer.github.com/v3/repos/releases/#create-a-release
-        const CURL_CMD = [
-          'curl',
-          '-H "Content-Type: application/json"',
-          `-H "Authorization: token ${repoToken}"`,
-          '-X POST',
-          `-d '${JSON_PAYLOAD.replace(/'/g, '\\u0027')}'`,
-          '--silent --output /dev/null --show-error --fail',
-          REPO_API__RELEASES_URL,
-        ].join(' ');
-        
-        if (args.dryRun) {
-          console.log(
-                `  ${color.green('Payload')}: ${JSON.stringify(JSON.parse(JSON_PAYLOAD), null, 2)}`
-            +`\n  ${color.green('URL')}: ${color.blue.bold.underline(REPO_API__RELEASES_URL)}`
-          );
-          dryRunCmd(CURL_CMD);
-        }
-        else await cmd(CURL_CMD, {
-          onError: rollbackRelease,
-          silent: false,
-        });
-      }
-      else {
-        console.log(`\n ${color.black.bgYellow(' WARN ')} ${color.yellow('Skipping GH release creation: No GH token found')}`);
-      }
     }
     else {
       await rollbackRelease();
