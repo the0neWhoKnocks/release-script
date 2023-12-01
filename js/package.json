@@ -1,9 +1,0 @@
-{
-  "name": "example-package",
-  "version": "0.0.1",
-  "description": "Just an example package.json file",
-  "scripts": {
-    "compile": "echo \"Compiling fake files\" && sleep 1 && exit 0",
-    "test": "echo \"Running fake tests\" && sleep 1 && exit 0"
-  }
-}
