@@ -447,14 +447,12 @@ const genConfig = async ({
       handleError(1, `You need to run \`docker login ${DOCKER__REGISTRY_DOMAIN} -u <USERNAME>\``);
     }
     
-    // If the URL contains a trailing slash, the curl will fail
-    const parsedRegistryURL = registryURL.replace(/\/$/, '');
-    const result = await cmd(`curl --head ${parsedRegistryURL}`);
+    const result = await cmd(`curl --head ${registryURL}`);
     if (result.includes('200 OK')) {
       console.log(` ${color.green(SYMBOL__CHECK)} Can connect to the Docker registry`);
     }
     else {
-      handleError(1, `Could not connect to the Docker registry: ${parsedRegistryURL}\n\n${result}`);
+      handleError(1, `Could not connect to the Docker registry: ${registryURL}\n\n${result}`);
     }
   }
   catch (err) {
