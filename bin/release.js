@@ -436,8 +436,10 @@ const genConfig = async ({
   
   // Verify Docker setup =======================================================
   try {
+    // https://www.dockerstatus.com/ has no API, but leaving here as a possible future source.
+    
     const dockerConfig = require(`${process.env.HOME}/.docker/config.json`);
-    const registryURL = Object.keys(dockerConfig.auths).find((url) => url.includes(DOCKER__REGISTRY_DOMAIN));
+    let registryURL = Object.keys(dockerConfig.auths).find((url) => url.includes(DOCKER__REGISTRY_DOMAIN));
     const loggedIn = !!registryURL;
     
     if (loggedIn) {
@@ -447,7 +449,8 @@ const genConfig = async ({
       handleError(1, `You need to run \`docker login ${DOCKER__REGISTRY_DOMAIN} -u <USERNAME>\``);
     }
     
-    const result = await cmd(`curl --head ${registryURL}`);
+    registryURL = `${registryURL}search`; // for some reason the base URL now fails, but `/search` still works.
+    const result = await cmd(`curl -i ${registryURL}`);
     if (result.includes('200 OK')) {
       console.log(` ${color.green(SYMBOL__CHECK)} Can connect to the Docker registry`);
     }
