@@ -533,7 +533,7 @@ const genConfig = async ({
   }
 
   // Get current version number
-  const ORIGINAL_VERSION = PACKAGE_JSON.version;
+  const ORIGINAL_VERSION = PACKAGE_JSON.version || '0.0.1';
   // Build out what the version would be based on what the user chooses
   const VERSION_NUMS = ORIGINAL_VERSION.split('.');
   const MAJOR = `${+VERSION_NUMS[0] + 1}.0.0`;
