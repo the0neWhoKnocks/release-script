@@ -10,20 +10,20 @@
     "desc": "URL that the App will be available at once started."
   },
   "CMD__DOCKER_BUILD": {
-    "value": "docker compose build",
+    "value": "docker compose build <SERVICE>",
     "desc": "Command to build specific or all Docker containers."
   },
   "CMD__DOCKER_START": {
-    "value": "docker compose up --remove-orphans -d",
+    "value": "docker compose up --remove-orphans -d <SERVICE>",
     "desc": "Command to start the built Container(s), so a Dev can verify before it's deployed."
   },
   "CMD__COMPILE_ASSETS": {
-    "value": "npm run compile",
+    "value": "docker compose run <SERVICE>-dev zsh -c \"npm i\" && docker compose run -e NODE_ENV=production <SERVICE>-dev zsh -c \"npm run build\"",
     "desc": "Command to compile any assets that may be needed by Docker, shipped off to S3, etc."
   },
   "DOCKER__IMG_NAME": {
-    "value": "hello-world",
-    "desc": "Name of the Docker image: <DOCKER_USER>/<NAME>."
+    "value": "<DOCKER_USER>/<IMG_NAME>",
+    "desc": "Name of the Docker image: <DOCKER_USER>/<IMG_NAME>."
   },
   "DOCKER__REGISTRY_DOMAIN": {
     "value": "",
