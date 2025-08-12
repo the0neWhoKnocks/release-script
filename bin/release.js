@@ -451,7 +451,7 @@ const genConfig = async ({
     
     registryURL = `${registryURL}search`; // for some reason the base URL now fails, but `/search` still works.
     const result = await cmd(`curl -i ${registryURL}`);
-    if (result.includes('200 OK')) {
+    if (result.includes('200 OK') || result.includes('HTTP/2 200')) {
       console.log(` ${color.green(SYMBOL__CHECK)} Can connect to the Docker registry`);
     }
     else {
